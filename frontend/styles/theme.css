@@ -1,0 +1,120 @@
+.utility-button {
+  height: 38px;
+  min-width: 38px;
+  padding: 0 10px;
+  border: 1px solid #dce5dc;
+  border-radius: 12px;
+  background: #fff;
+  color: #244a30;
+  font-size: 12px;
+  font-weight: 750;
+  display: inline-grid;
+  place-items: center;
+}
+.header-actions {
+  gap: 12px;
+}
+.theme-dark {
+  --ink: #e8f0e9;
+  --muted: #a7b6aa;
+  --line: #34443a;
+  --cream: #1b2920;
+  background: #101813;
+  color: var(--ink);
+}
+.theme-dark .header,
+.theme-dark .cart-drawer,
+.theme-dark .product-card,
+.theme-dark .reorder-panel,
+.theme-dark .empty-state,
+.theme-dark .checkout-preview {
+  background: #18231c;
+  color: var(--ink);
+}
+.theme-dark .header {
+  border-color: #2b3b30;
+}
+.theme-dark .announcement {
+  background: #0e3822;
+}
+.theme-dark .nav button,
+.theme-dark .brand,
+.theme-dark .product-info h3,
+.theme-dark .section-heading h2,
+.theme-dark .reorder-copy h2,
+.theme-dark .about-section h2,
+.theme-dark .drawer-header h2,
+.theme-dark .cart-row-info strong,
+.theme-dark .reorder-name strong,
+.theme-dark .reorder-panel-head {
+  color: var(--ink);
+}
+.theme-dark .hero,
+.theme-dark .shop-section,
+.theme-dark .reorder-section,
+.theme-dark .benefits,
+.theme-dark .about-section,
+.theme-dark .footer {
+  background: #101813;
+  color: var(--ink);
+}
+.theme-dark .benefits-inner,
+.theme-dark .product-info,
+.theme-dark .reorder-panel,
+.theme-dark .cart-row,
+.theme-dark .checkout-summary {
+  border-color: #34443a;
+}
+.theme-dark .product-info p,
+.theme-dark .hero-copy p,
+.theme-dark .section-heading p,
+.theme-dark .reorder-copy p,
+.theme-dark .about-section p,
+.theme-dark .footer {
+  color: #a7b6aa;
+}
+.theme-dark .utility-button,
+.theme-dark .category-chip,
+.theme-dark .filters select,
+.theme-dark .search-box,
+.theme-dark .checkout-preview input {
+  background: #202d24;
+  color: #e8f0e9;
+  border-color: #405447;
+}
+.theme-dark .category-chip.selected {
+  background: #174d30;
+  border-color: #338452;
+}
+.theme-dark .stock-filter,
+.theme-dark .delivery-location,
+.theme-dark .section-count,
+.theme-dark .reorder-total {
+  color: #bdc9bf;
+}
+.theme-dark .drawer-overlay {
+  background: #0009;
+}
+.theme-dark .close-button,
+.theme-dark .qty-control button,
+.theme-dark .back-button {
+  background: #243329;
+  color: #e8f0e9;
+  border-color: #405447;
+}
+.theme-dark .footer {
+  border-color: #34443a;
+}
+.theme-dark .reorder-section {
+  background: #14251a;
+}
+@media (max-width: 750px) {
+  .header-actions {
+    gap: 8px;
+  }
+  .utility-button {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 8px;
+  }
+}

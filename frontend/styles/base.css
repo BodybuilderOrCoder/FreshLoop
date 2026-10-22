@@ -1,0 +1,158 @@
+:root {
+  --green: #16a34a;
+  --deep: #14532d;
+  --ink: #16251c;
+  --muted: #748077;
+  --line: #e7ebe7;
+  --cream: #f8faf6;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  margin: 0;
+  background: #fff;
+  color: var(--ink);
+  font-family: Arial, Helvetica, sans-serif;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.container {
+  width: min(1190px, calc(100% - 56px));
+  margin-inline: auto;
+}
+.announcement {
+  background: #154d30;
+  color: #f1fff5;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  padding: 10px 12px;
+}
+.announcement span {
+  color: #9edeb0;
+  margin: 0 12px;
+}
+.header {
+  background: #fff;
+  border-bottom: 1px solid #edf0eb;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.header-inner {
+  height: 81px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+}
+.brand {
+  border: 0;
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #173b24;
+  font-size: 25px;
+  font-weight: 850;
+  letter-spacing: -1.7px;
+  padding: 0;
+  text-align: left;
+  line-height: 0.86;
+}
+.brand-icon {
+  font-size: 36px;
+  display: grid;
+  place-items: center;
+  color: var(--green);
+  font-weight: 500;
+}
+.brand-green {
+  color: var(--green);
+}
+.brand small {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: #799383;
+  margin-top: 8px;
+}
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 33px;
+}
+.nav button {
+  border: 0;
+  background: none;
+  color: #4a5c50;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  padding: 8px 0;
+}
+.nav button:hover {
+  color: var(--green);
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.delivery-location {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 18px;
+}
+.delivery-location span {
+  font-size: 10px;
+  color: #8b9b8d;
+  line-height: 1.6;
+}
+.delivery-location strong {
+  font-size: 12px;
+  color: #263a2c;
+}
+.cart-button {
+  border: 0;
+  background: #eaf8ed;
+  border-radius: 12px;
+  padding: 12px 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #176331;
+  font-size: 13px;
+  font-weight: 750;
+}
+.cart-button b {
+  background: #169d47;
+  color: #fff;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+}
+.menu-toggle {
+  display: none;
+  border: 0;
+  background: none;
+  font-size: 24px;
+}
