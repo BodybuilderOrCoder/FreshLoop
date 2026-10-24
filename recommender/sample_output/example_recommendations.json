@@ -1,0 +1,188 @@
+{
+  "0793efd6-5a98-404c-a0d7-e40060c2747c": [
+    {
+      "product_id": "4ee87672-20cf-4ae8-80a2-1359dd2180ac",
+      "score": 0.5855,
+      "source": "personal",
+      "rank": 1
+    },
+    {
+      "product_id": "5ad2e0a4-2635-4c5b-b31b-4cd3ec3894fe",
+      "score": 0.5855,
+      "source": "personal",
+      "rank": 2
+    },
+    {
+      "product_id": "70696dca-8e69-401a-bd48-fe62dbc8b0c5",
+      "score": 0.5855,
+      "source": "personal",
+      "rank": 3
+    },
+    {
+      "product_id": "f124e463-1cd5-4c71-a15a-e46cc7a36afc",
+      "score": 0.5855,
+      "source": "personal",
+      "rank": 4
+    },
+    {
+      "product_id": "222dc236-3eae-4e32-9d66-75f99d093ed5",
+      "score": 0.4774,
+      "source": "personal",
+      "rank": 5
+    },
+    {
+      "product_id": "2e8ddb7d-9d85-44d4-b1ab-f5f6c92136da",
+      "score": 0.4774,
+      "source": "personal",
+      "rank": 6
+    },
+    {
+      "product_id": "4898ae3d-d2ac-4ae2-819b-f5848b5b41c5",
+      "score": 0.4774,
+      "source": "personal",
+      "rank": 7
+    },
+    {
+      "product_id": "4efed855-0c82-4a05-8c5f-d5bcaac9222c",
+      "score": 0.4774,
+      "source": "personal",
+      "rank": 8
+    },
+    {
+      "product_id": "9e191424-24ec-42cc-bc1f-f6a146089bb9",
+      "score": 0.4774,
+      "source": "personal",
+      "rank": 9
+    },
+    {
+      "product_id": "c338edb1-0507-48e4-89a1-6407cdfb8391",
+      "score": 0.4774,
+      "source": "personal",
+      "rank": 10
+    }
+  ],
+  "1c863a70-4d79-4be6-b59b-406f0f91cbed": [
+    {
+      "product_id": "29579dd3-b17f-4099-8208-5083b65eb81d",
+      "score": 0.5186,
+      "source": "personal",
+      "rank": 1
+    },
+    {
+      "product_id": "b0fdc2cf-2534-447a-922c-4410c0ef7ba2",
+      "score": 0.5186,
+      "source": "personal",
+      "rank": 2
+    },
+    {
+      "product_id": "08515409-4811-46c9-80fe-06c2cf2b69e1",
+      "score": 0.2726,
+      "source": "personal",
+      "rank": 3
+    },
+    {
+      "product_id": "0bcf8a3d-7901-4901-9837-22566ec51c29",
+      "score": 0.2726,
+      "source": "personal",
+      "rank": 4
+    },
+    {
+      "product_id": "38f7500b-bd87-423b-ae59-d2ed816de413",
+      "score": 0.2726,
+      "source": "personal",
+      "rank": 5
+    },
+    {
+      "product_id": "61948a36-cb98-4903-b08e-206d076d0588",
+      "score": 0.2726,
+      "source": "personal",
+      "rank": 6
+    },
+    {
+      "product_id": "7408b399-9d02-49c3-8fb6-90df85fb5394",
+      "score": 0.2726,
+      "source": "personal",
+      "rank": 7
+    },
+    {
+      "product_id": "490e6b6a-e1b4-47f5-82c2-1a916d4d004a",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 8
+    },
+    {
+      "product_id": "269fd15a-5bb8-4ed3-9089-40ac3a6ec5ce",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 9
+    },
+    {
+      "product_id": "4f408751-84c2-49bb-af3a-d443403b3d72",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 10
+    }
+  ],
+  "new-user-without-history": [
+    {
+      "product_id": "490e6b6a-e1b4-47f5-82c2-1a916d4d004a",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 1
+    },
+    {
+      "product_id": "08515409-4811-46c9-80fe-06c2cf2b69e1",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 2
+    },
+    {
+      "product_id": "269fd15a-5bb8-4ed3-9089-40ac3a6ec5ce",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 3
+    },
+    {
+      "product_id": "4f408751-84c2-49bb-af3a-d443403b3d72",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 4
+    },
+    {
+      "product_id": "5afd4d37-0356-4655-9942-2aab1f97bff2",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 5
+    },
+    {
+      "product_id": "760dfc0d-9c63-4af2-a0c1-a9f89ee76841",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 6
+    },
+    {
+      "product_id": "cff38370-f812-4b63-9d10-f37c07e432c7",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 7
+    },
+    {
+      "product_id": "041490bd-6311-4da3-bd48-f7cebccadebf",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 8
+    },
+    {
+      "product_id": "244d41e5-dc2f-4d90-8cd0-76258b44f00f",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 9
+    },
+    {
+      "product_id": "272601eb-f4a9-4a88-95f8-fdd5a25e84e1",
+      "score": 0.0,
+      "source": "popular",
+      "rank": 10
+    }
+  ]
+}
