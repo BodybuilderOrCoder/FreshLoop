@@ -97,15 +97,16 @@ alembic upgrade head
 
 ### 4.3. Seed Development Dataset (Target: 50 Users, 200 Products, 3 Warehouses)
 ```bash
-python seed_mock_data.py
+# Clean existing data and seed freshly (reproducible with random.seed(42)):
+python seed_mock_data.py --clean
 ```
-*Output:*
-- 50 Vietnamese users (1 Admin, 1 Staff, 48 Customers)
-- 200 Grocery products across 8 categories
-- 3 Warehouses (`HUB-01`, `MART-02`, `MART-03`)
-- 600 Inventory level records
-- Historical orders and order items
-- Pre-computed `purchase_history` feature store records
+*Behavioral Seeding Mechanism:*
+- **50 Vietnamese users** (1 Admin, 1 Staff, 48 Customers).
+- **200 Grocery products** across 8 categories with realistic VND prices.
+- **3 Warehouses** (`HUB-01`, `MART-02`, `MART-03`) with 600 stock rows.
+- **Habitual Favorite Baskets:** Each customer is assigned 8–15 favorite products tied to their lifestyle categories.
+- **8–12 Orders per User** spread across 60–90 days (~1 order/week). Each order re-selects from favorite basket with 60%–80% probability, plus 1–3 exploration items.
+- **PurchaseHistory Feature Store:** Pre-computed implicit feedback for completed orders (`DELIVERED` & `CONFIRMED` only). `total_purchases` counts distinct order occurrences (reorder frequency). High repeat pairs ($purchase\_count \ge 3$) are created to ensure high ALS recommendation accuracy ($\text{Precision@10} \ge 65\%$).
 
 ---
 
@@ -125,7 +126,7 @@ python seed_mock_data.py
 - **Feature Store Source:** Read directly from `purchase_history`:
   - `user_id`: UUID of customer
   - `product_id`: UUID of purchased product
-  - `total_purchases`: Raw purchase frequency
-  - `recency_score`: Time-decay factor $\in (0, 1]$
+  - `total_purchases`: Number of distinct finished orders containing this product (Order Count / Frequency). *Note: `PENDING` and `CANCELLED` orders are strictly excluded from history calculations.*
+  - `recency_score`: Exponential time-decay factor $e^{-\lambda \Delta t} \in (0, 1]$
   - `implicit_rating`: Pre-computed confidence score for ALS training matrix
 - **Cold-Start Fallback:** Query top products ordered by `implicit_rating DESC` from `purchase_history` when Redis cache has a MISS.
