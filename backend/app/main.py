@@ -1,5 +1,6 @@
 ﻿import os
 
+from app.routers.products import router as products_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -36,6 +37,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+app.include_router(products_router)
 
 @app.get("/health", tags=["Health"])
 def health_check():
