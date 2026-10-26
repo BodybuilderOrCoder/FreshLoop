@@ -1,11 +1,19 @@
-import { products } from "../data/products";
+import type { Product } from "../data/products";
 import { money } from "../utils/presentation";
 import type { Translate } from "../utils/presentation";
 type Props = {
+  products: Product[]
   tr: Translate;
   addReorder: () => void;
 };
-export default function QuickReorder({ tr, addReorder }: Props) {
+export default function QuickReorder({
+  tr,
+  products,
+  addReorder,
+}: Props) {
+  const repeatProducts = products.filter(
+    (product) => product.repeat && product.stock > 0,
+  );
   return (
     <section className="reorder-section" id="reorder">
       <div className="container reorder-inner">
@@ -47,7 +55,7 @@ export default function QuickReorder({ tr, addReorder }: Props) {
           <div className="reorder-total">
             <span>4 everyday favorites</span>
             <strong>
-              {money(products.filter((p) => p.repeat).reduce((s, p) => s + p.price, 0))}
+              {money(repeatProducts.reduce((s, p) => s + p.price, 0))}
             </strong>
           </div>
         </div>

@@ -1,7 +1,16 @@
 export type Category =
-  "All" | "Produce" | "Dairy & Eggs" | "Meat & Seafood" | "Bakery" | "Pantry";
+  | "All"
+  | "Produce"
+  | "Dairy & Eggs"
+  | "Meat & Seafood"
+  | "Bakery"
+  | "Pantry"
+  | "Beverages";
+
 export type Product = {
   id: number;
+  backendProductId?: string;
+  sku?: string;
   name: string;
   detail: string;
   price: number;

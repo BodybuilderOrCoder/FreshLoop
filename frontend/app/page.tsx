@@ -1,9 +1,14 @@
+
 "use client";
+
 import { useCallback, useMemo, useState } from "react";
-import { products, type Category, type Product } from "../data/products";
+
+import type { Category, Product } from "../data/products";
+import { useCatalog } from "../hooks/useCatalog";
 import { useCart } from "../hooks/useCart";
 import { useFavorites } from "../hooks/useFavorites";
 import { vi } from "../utils/presentation";
+
 import Header from "../components/Header";
 import Hero from "../components/Hero";
 import Benefits from "../components/Benefits";
@@ -17,7 +22,6 @@ import CartDrawer from "../components/CartDrawer";
 export default function Home() {
   const [category, setCategory] = useState<Category>("All");
   const [search, setSearch] = useState("");
-  const { cart, count, subtotal, delivery, changeQty } = useCart();
   const [cartOpen, setCartOpen] = useState(false);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [sort, setSort] = useState("featured");
@@ -25,50 +29,124 @@ export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [checkout, setCheckout] = useState(false);
   const [address, setAddress] = useState("");
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
+
   const [language] = useState<"en" | "vi">("en");
   const [theme] = useState<"light" | "dark">("light");
+
+  const {
+    products: catalogProducts,
+    warehouse,
+    loading: catalogLoading,
+    error: catalogError,
+  } = useCatalog();
+
+  const { cart, count, subtotal, delivery, changeQty } =
+    useCart(catalogProducts);
+
+  const {
+    favorites,
+    favoritesLoaded,
+    toggleFavorite,
+  } = useFavorites();
+
   const tr = useCallback(
-    (value: string) => (language === "vi" ? vi[value] || value : value),
+    (value: string) =>
+      language === "vi" ? vi[value] || value : value,
     [language],
   );
 
-  const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const { favorites, favoritesLoaded, toggleFavorite } = useFavorites();
-
   const filtered = useMemo(() => {
-    const list = products.filter(
-      (p) =>
-        (category === "All" || p.category === category) &&
-        `${tr(p.name)} ${tr(p.detail)}`.toLowerCase().includes(search.toLowerCase()) &&
-        (!onlyAvailable || p.stock > 0) &&
-        (!onlyFavorites || favorites.includes(p.id)),
+    const query = search.trim().toLowerCase();
+
+    const list = catalogProducts.filter(
+      (product) =>
+        (category === "All" || product.category === category) &&
+        `${tr(product.name)} ${tr(product.detail)}`
+          .toLowerCase()
+          .includes(query) &&
+        (!onlyAvailable || product.stock > 0) &&
+        (!onlyFavorites || favorites.includes(product.id)),
     );
-    if (sort === "price-asc") list.sort((a, b) => a.price - b.price);
-    if (sort === "price-desc") list.sort((a, b) => b.price - a.price);
-    if (sort === "name") list.sort((a, b) => a.name.localeCompare(b.name));
+
+    if (sort === "price-asc") {
+      list.sort((a, b) => a.price - b.price);
+    }
+
+    if (sort === "price-desc") {
+      list.sort((a, b) => b.price - a.price);
+    }
+
+    if (sort === "name") {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
     return list;
-  }, [category, search, onlyAvailable, sort, onlyFavorites, favorites, tr]);
-  const add = (p: Product) => {
-    changeQty(p.id, 1);
-    setNotice(`${tr(p.name)} added to your cart`);
+  }, [
+    catalogProducts,
+    category,
+    search,
+    onlyAvailable,
+    onlyFavorites,
+    favorites,
+    sort,
+    tr,
+  ]);
+
+  const add = (product: Product) => {
+    if (product.stock <= 0) {
+      setNotice(`${tr(product.name)} is out of stock`);
+      window.setTimeout(() => setNotice(""), 2500);
+      return;
+    }
+
+    if ((cart[product.id] ?? 0) >= product.stock) {
+      setNotice(`Stock limit reached for ${tr(product.name)}`);
+      window.setTimeout(() => setNotice(""), 2500);
+      return;
+    }
+
+    changeQty(product.id, 1);
+    setNotice(`${tr(product.name)} added to your cart`);
     window.setTimeout(() => setNotice(""), 2500);
   };
-  const jumpToShop = (cat: Category = "All") => {
-    setCategory(cat);
-    document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" });
+
+  const jumpToShop = (nextCategory: Category = "All") => {
+    setCategory(nextCategory);
+    document.getElementById("shop")?.scrollIntoView({
+      behavior: "smooth",
+    });
     setMenuOpen(false);
   };
+
   const addReorder = () => {
-    products.filter((p) => p.repeat).forEach((p) => changeQty(p.id, 1));
+    const repeatProducts = catalogProducts.filter(
+      (product) => product.repeat && product.stock > 0,
+    );
+
+    if (repeatProducts.length === 0) {
+      setNotice("Quick Reorder is unavailable until purchase history is connected.");
+      window.setTimeout(() => setNotice(""), 2500);
+      return;
+    }
+
+    repeatProducts.forEach((product) => {
+      changeQty(product.id, 1);
+    });
+
     setCartOpen(true);
   };
 
   return (
-    <div className={`site-shell ${theme === "dark" ? "theme-dark" : ""}`} lang={language}>
+    <div
+      className={`site-shell ${theme === "dark" ? "theme-dark" : ""}`}
+      lang={language}
+    >
       <div className="announcement">
         {tr("Fresh groceries, smarter shopping")} <span>·</span>{" "}
         {tr("Free delivery on orders over 200,000₫")}
       </div>
+
       <Header
         tr={tr}
         jumpToShop={jumpToShop}
@@ -77,43 +155,86 @@ export default function Home() {
         count={count}
         setCartOpen={setCartOpen}
       />
+
       <main>
         <Hero tr={tr} jumpToShop={jumpToShop} />
         <Benefits />
-        <ShopSection
-          tr={tr}
-          language={language}
-          category={category}
-          setCategory={setCategory}
-          search={search}
-          setSearch={setSearch}
-          sort={sort}
-          setSort={setSort}
-          onlyAvailable={onlyAvailable}
-          setOnlyAvailable={setOnlyAvailable}
-          onlyFavorites={onlyFavorites}
-          setOnlyFavorites={setOnlyFavorites}
-          favorites={favorites}
-          favoritesLoaded={favoritesLoaded}
-          toggleFavorite={toggleFavorite}
-          filtered={filtered}
-          cart={cart}
-          changeQty={changeQty}
-          add={add}
-        />
-        <QuickReorder tr={tr} addReorder={addReorder} />
+
+        {catalogLoading ? (
+          <section className="container" role="status" aria-live="polite">
+            Loading products and warehouse stock...
+          </section>
+        ) : catalogError ? (
+          <section className="container" role="alert">
+            <h2>Unable to load products</h2>
+            <p>{catalogError}</p>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </button>
+          </section>
+        ) : (
+          <>
+            {warehouse && (
+              <div className="container">
+                <p className="section-count" aria-live="polite">
+                  Stock location:{" "}
+                  <strong>
+                    {warehouse.code} — {warehouse.name}
+                  </strong>
+                </p>
+              </div>
+            )}
+
+            <ShopSection
+              tr={tr}
+              language={language}
+              category={category}
+              setCategory={setCategory}
+              search={search}
+              setSearch={setSearch}
+              sort={sort}
+              setSort={setSort}
+              onlyAvailable={onlyAvailable}
+              setOnlyAvailable={setOnlyAvailable}
+              onlyFavorites={onlyFavorites}
+              setOnlyFavorites={setOnlyFavorites}
+              favorites={favorites}
+              favoritesLoaded={favoritesLoaded}
+              toggleFavorite={toggleFavorite}
+              filtered={filtered}
+              cart={cart}
+              changeQty={changeQty}
+              add={add}
+            />
+
+            <QuickReorder
+              tr={tr}
+              products={catalogProducts}
+              addReorder={addReorder}
+            />
+          </>
+        )}
+
         <About />
         <Contact />
       </main>
+
       <Footer />
+
       {notice && (
-        <div className="toast" role="status">
+        <div className="toast" role="status" aria-live="polite">
           ✓ {notice}
         </div>
       )}
+
       {cartOpen && (
         <CartDrawer
           tr={tr}
+          products={catalogProducts}
           jumpToShop={jumpToShop}
           count={count}
           setCartOpen={setCartOpen}

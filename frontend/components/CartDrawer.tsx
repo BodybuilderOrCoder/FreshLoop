@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import type { Category } from "../data/products";
-import { products } from "../data/products";
+import type { Category, Product } from "../data/products";
 import { money } from "../utils/presentation";
 import type { Translate } from "../utils/presentation";
 type Props = {
+  products: Product[];
   tr: Translate;
   jumpToShop: (category?: Category) => void;
   count: number;
@@ -20,6 +20,7 @@ type Props = {
 };
 export default function CartDrawer({
   tr,
+  products,
   jumpToShop,
   count,
   setCartOpen,

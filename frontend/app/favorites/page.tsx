@@ -1,14 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { products } from "../../data/products";
+import { useMemo } from "react";
+
+import { useCatalog } from "../../hooks/useCatalog";
 import { useFavorites } from "../../hooks/useFavorites";
 
 export default function FavoritesPage() {
+  const {
+    products: catalogProducts,
+    loading: catalogLoading,
+    error: catalogError,
+  } = useCatalog();
+
   const { favorites, favoritesLoaded, toggleFavorite } = useFavorites();
 
-  const favoriteProducts = products.filter((product) =>
-    favorites.includes(product.id)
+  const favoriteProducts = useMemo(
+    () =>
+      catalogProducts.filter((product) =>
+        favorites.includes(product.id),
+      ),
+    [catalogProducts, favorites],
   );
 
   return (
@@ -24,15 +36,34 @@ export default function FavoritesPage() {
           <p>Keep your favorite groceries in one place.</p>
         </div>
 
-        {favoritesLoaded && (
+        {favoritesLoaded && !catalogLoading && !catalogError && (
           <span className="section-count">
             {favoriteProducts.length} saved products
           </span>
         )}
       </div>
 
-      {!favoritesLoaded ? (
-        <p role="status">Loading your favorites...</p>
+      {catalogLoading ? (
+        <p role="status" aria-live="polite">
+          Loading products and warehouse stock...
+        </p>
+      ) : catalogError ? (
+        <section className="empty-state" role="alert">
+          <h2>Unable to load your favorite products</h2>
+          <p>{catalogError}</p>
+
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
+        </section>
+      ) : !favoritesLoaded ? (
+        <p role="status" aria-live="polite">
+          Loading your favorites...
+        </p>
       ) : favoriteProducts.length === 0 ? (
         <div className="empty-state">
           <h2>No favorites yet</h2>
