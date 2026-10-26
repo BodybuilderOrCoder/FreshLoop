@@ -1,7 +1,12 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   getWarehouses,
@@ -12,6 +17,12 @@ import {
 import { mapInventoryProducts } from "../lib/product-mapper";
 import type { Product } from "../data/products";
 
+import {
+  chooseDefaultWarehouse,
+  createLatestRequestGuard,
+  getActiveWarehouses,
+} from "../lib/catalog-logic";
+
 export function useCatalog() {
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -19,28 +30,27 @@ export function useCatalog() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Track the newest inventory request.
+  const requestGuard = useRef(createLatestRequestGuard());
+
   // Load active warehouses and select HUB-01 by default.
   useEffect(() => {
     let cancelled = false;
 
     async function loadWarehouses() {
+      setError("");
+
       try {
         const result = await getWarehouses();
-        const activeWarehouses = result.filter(
-          (item) => item.is_active,
-        );
+        const activeWarehouses = getActiveWarehouses(result);
 
-        if (activeWarehouses.length === 0) {
-          throw new Error("No active warehouse is available.");
-        }
-
-        const defaultWarehouse =
-          activeWarehouses.find((item) => item.code === "HUB-01") ??
-          activeWarehouses[0];
+        // Throws when there is no active warehouse.
+        const defaultWarehouse = chooseDefaultWarehouse(result);
 
         if (cancelled) return;
 
         setWarehouses(activeWarehouses);
+
         setWarehouseId((currentId) => {
           const currentStillExists = activeWarehouses.some(
             (item) => item.warehouse_id === currentId,
@@ -55,12 +65,13 @@ export function useCatalog() {
 
         setWarehouses([]);
         setWarehouseId("");
-        setProducts([]);
+
         setError(
           err instanceof Error
             ? err.message
             : "Failed to load warehouses.",
         );
+
         setLoading(false);
       }
     }
@@ -72,34 +83,45 @@ export function useCatalog() {
     };
   }, []);
 
-  // Reload inventory whenever the selected warehouse changes.
+  // Load inventory for the currently selected warehouse.
   useEffect(() => {
-    if (!warehouseId || warehouses.length === 0) return;
+    if (!warehouseId || warehouses.length === 0) {
+      return;
+    }
 
-    let cancelled = false;
+    const requestId = requestGuard.current.begin();
+
+    setLoading(true);
+    setError("");
 
     async function loadInventory() {
-      setLoading(true);
-      setError("");
-
       try {
         const inventory = await getWarehouseProducts(warehouseId);
         const mappedProducts = mapInventoryProducts(inventory);
 
-        if (cancelled) return;
+        // Ignore responses belonging to an older request.
+        if (!requestGuard.current.isLatest(requestId)) {
+          return;
+        }
 
         setProducts(mappedProducts);
       } catch (err) {
-        if (cancelled) return;
+        if (!requestGuard.current.isLatest(requestId)) {
+          return;
+        }
 
-        setProducts([]);
         setError(
           err instanceof Error
             ? err.message
             : "Failed to load warehouse inventory.",
         );
+
+        // Keep the last successful catalog in memory.
+        // Clearing it here could cause useCart to remove every item
+        // after a temporary network or API failure.
       } finally {
-        if (!cancelled) {
+        // Only the latest request may finish the loading state.
+        if (requestGuard.current.isLatest(requestId)) {
           setLoading(false);
         }
       }
@@ -108,7 +130,9 @@ export function useCatalog() {
     void loadInventory();
 
     return () => {
-      cancelled = true;
+      // Invalidate this request when the warehouse changes
+      // or this effect is cleaned up.
+      requestGuard.current.invalidate(requestId);
     };
   }, [warehouseId, warehouses]);
 
@@ -126,7 +150,9 @@ export function useCatalog() {
   );
 
   const warehouse =
-    warehouses.find((item) => item.warehouse_id === warehouseId) ?? null;
+    warehouses.find(
+      (item) => item.warehouse_id === warehouseId,
+    ) ?? null;
 
   return {
     products,
