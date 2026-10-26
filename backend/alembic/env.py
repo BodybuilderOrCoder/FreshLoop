@@ -17,6 +17,16 @@ if config.config_file_name is not None:
 import sys
 import os
 
+# Allow an explicit database override for isolated test migrations.
+# Keep the existing alembic.ini URL as the default.
+database_url_override = os.getenv("ALEMBIC_DATABASE_URL")
+
+if database_url_override:
+    config.set_main_option(
+        "sqlalchemy.url",
+        database_url_override.replace("%", "%%"),
+    )
+
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
