@@ -1,8 +1,14 @@
-
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+)
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,6 +17,10 @@ from app.models import InventoryLevel, Product, Warehouse
 from app.schemas.inventory import (
     ProductInventoryResponse,
     WarehouseResponse,
+)
+from app.services.inventory_events import (
+    inventory_event_stream,
+    is_active_warehouse,
 )
 
 
@@ -86,3 +96,57 @@ def list_warehouse_products(
         )
         for product, inventory in rows
     ]
+
+@router.get(
+    "/{warehouse_id}/inventory/events",
+    responses={
+        200: {
+            "description": "Server-Sent Events for warehouse inventory changes",
+            "content": {"text/event-stream": {}},
+        },
+        404: {"description": "Active warehouse not found"},
+    },
+)
+def stream_warehouse_inventory(
+    warehouse_id: UUID,
+    request: Request,
+    poll_interval_seconds: float = Query(
+        default=2.0,
+        ge=1.0,
+        le=30.0,
+    ),
+    heartbeat_seconds: float = Query(
+        default=15.0,
+        ge=5.0,
+        le=60.0,
+    ),
+):
+    """Stream an initial inventory snapshot and subsequent changes."""
+    if heartbeat_seconds < poll_interval_seconds:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "heartbeat_seconds must be greater than or equal to "
+                "poll_interval_seconds"
+            ),
+        )
+    if not is_active_warehouse(warehouse_id):
+        raise HTTPException(
+            status_code=404,
+            detail="Active warehouse not found",
+        )
+
+    return StreamingResponse(
+        inventory_event_stream(
+            request=request,
+            warehouse_id=warehouse_id,
+            poll_interval_seconds=poll_interval_seconds,
+            heartbeat_seconds=heartbeat_seconds,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
