@@ -45,16 +45,21 @@ Physical fulfillment nodes (Central Hub and affiliated Mini-Marts in HCMC).
 | Column | Type | Nullable | Default | Constraints & Index | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `warehouse_id` | `UUID` | No | `gen_random_uuid()` | **PRIMARY KEY** | Warehouse identifier |
-| `code` | `VARCHAR(20)` | No | None | **UNIQUE** (`uq_warehouses_code`) | Operational code (e.g. `HUB-01`, `MART-02`) |
+| `code` | `VARCHAR(20)` | No | None | **UNIQUE** (`uq_warehouses_code`) | Operational code (`HUB-01`, `MART-02`, `MART-03`) |
 | `name` | `VARCHAR(150)` | No | None | None | Facility name |
 | `location` | `TEXT` | No | None | None | Street address |
 | `service_zone` | `VARCHAR(50)` | No | None | None | Delivery zone (e.g. `ZONE_CENTRAL_D1_D3`) |
 | `is_active` | `BOOLEAN` | No | `TRUE` | None | Operational status flag |
 
+*Seeded Facility Records in PostgreSQL (`SELECT code, name, location, service_zone FROM warehouses;`):*
+1. `HUB-01` | **Central Hub Quan 1** | 123 Le Duan, Ben Nghe, Quan 1, TP.HCM | `ZONE_CENTRAL_D1_D3`
+2. `MART-02` | **FreshLoop Mini Mart Quan 7** | 88 Nguyen Thi Thap, Tan Phu, Quan 7, TP.HCM | `ZONE_SOUTH_D7_NHA_BE`
+3. `MART-03` | **FreshLoop Mini Mart Binh Thanh** | 45 Xo Viet Nghe Tinh, Phuong 19, Binh Thanh, TP.HCM | `ZONE_EAST_BINH_THANH_THU_DUC`
+
 ---
 
 ## 4. Table: `inventory_levels`
-Real-time stock ledger per warehouse. Supports concurrent multi-warehouse inventory.
+Real-time stock ledger per warehouse. Supports concurrent multi-warehouse inventory and pessimistic reservation.
 
 | Column | Type | Nullable | Default | Constraints & Index | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -66,8 +71,11 @@ Real-time stock ledger per warehouse. Supports concurrent multi-warehouse invent
 | `updated_at` | `TIMESTAMPTZ` | No | `NOW()` | None | Last stock change timestamp |
 
 *Table Constraints & Covering Indexes:*
-- `UNIQUE (product_id, warehouse_id)`: Prevents duplicate ledger entries.
-- `idx_inventory_lookup`: B-Tree index on `(warehouse_id, product_id)`.
+- `UNIQUE (product_id, warehouse_id)`: Prevents duplicate ledger entries (`uq_product_warehouse`).
+- `CHECK (quantity >= 0)`: Prevents negative shelf stock (`chk_inventory_qty_non_negative`).
+- `CHECK (reserved_quantity >= 0)`: Prevents negative reservation count (`chk_reserved_qty_non_negative`).
+- `CHECK (reserved_quantity <= quantity)`: Prevents overselling by guaranteeing reservations never exceed physical stock (`chk_reserved_le_quantity`).
+- `idx_inventory_lookup`: B-Tree index on `(warehouse_id, product_id)` for sub-millisecond stock checks during checkout.
 
 ---
 

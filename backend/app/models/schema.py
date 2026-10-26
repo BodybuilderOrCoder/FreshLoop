@@ -96,6 +96,7 @@ class InventoryLevel(Base):
         UniqueConstraint("product_id", "warehouse_id", name="uq_product_warehouse"),
         CheckConstraint("quantity >= 0", name="chk_inventory_qty_non_negative"),
         CheckConstraint("reserved_quantity >= 0", name="chk_reserved_qty_non_negative"),
+        CheckConstraint("reserved_quantity <= quantity", name="chk_reserved_le_quantity"),
         Index("idx_inventory_lookup", "warehouse_id", "product_id"),
     )
 

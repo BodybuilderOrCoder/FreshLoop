@@ -55,6 +55,42 @@ class TestDatabaseIntegrity(unittest.TestCase):
         with self.assertRaises(IntegrityError):
             self.db.commit()
 
+    def test_check_constraint_negative_reserved_quantity(self):
+        """Verify that PostgreSQL CHECK (reserved_quantity >= 0) blocks negative reservations."""
+        p = self.db.query(Product).first()
+        w = self.db.query(Warehouse).first()
+        if not p or not w:
+            self.skipTest("Database not seeded. Run seed script first.")
+
+        inv_bad = InventoryLevel(
+            inventory_id=uuid.uuid4(),
+            product_id=p.product_id,
+            warehouse_id=w.warehouse_id,
+            quantity=50,
+            reserved_quantity=-5,  # Violates chk_reserved_qty_non_negative
+        )
+        self.db.add(inv_bad)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+
+    def test_check_constraint_reserved_exceeds_quantity(self):
+        """Verify that PostgreSQL CHECK (reserved_quantity <= quantity) blocks overselling."""
+        p = self.db.query(Product).first()
+        w = self.db.query(Warehouse).first()
+        if not p or not w:
+            self.skipTest("Database not seeded. Run seed script first.")
+
+        inv_bad = InventoryLevel(
+            inventory_id=uuid.uuid4(),
+            product_id=p.product_id,
+            warehouse_id=w.warehouse_id,
+            quantity=10,
+            reserved_quantity=15,  # 15 > 10 violates chk_reserved_le_quantity
+        )
+        self.db.add(inv_bad)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+
     def test_check_constraint_negative_unit_price(self):
         """Verify that CHECK (unit_price >= 0) blocks negative product pricing."""
         bad_product = Product(
@@ -119,16 +155,16 @@ class TestDatabaseIntegrity(unittest.TestCase):
 
     def test_concurrent_inventory_reservation(self):
         """
-        Concurrency Simulation:
-        Two concurrent threads attempt to reserve the final remaining stock unit (available = 1).
-        Verifies that row-level locking (SELECT ... FOR UPDATE) ensures exactly ONE succeeds
-        and the second fails gracefully without overselling.
+        Concurrency Simulation WITH Row Lock (SELECT ... FOR UPDATE):
+        Inventory has quantity = 5.
+        Two concurrent threads (Client A and Client B) each attempt to reserve 3 units (total 6 > 5).
+        Verifies that row-level locking ensures exactly ONE succeeds (reserving 3 units)
+        and the second client is rejected gracefully with OUT_OF_STOCK.
         """
-        # Create an isolated temporary product & inventory row with available quantity = 1
         test_prod = Product(
             product_id=uuid.uuid4(),
             sku=f"CONCURRENCY-SKU-{uuid.uuid4().hex[:6]}",
-            name="Limited Edition Strawberry",
+            name="Limited Edition Strawberry 5 Qty",
             category="Trái cây tươi",
             unit_price=Decimal("100000.00"),
             unit="Hộp",
@@ -141,8 +177,8 @@ class TestDatabaseIntegrity(unittest.TestCase):
             inventory_id=uuid.uuid4(),
             product_id=test_prod.product_id,
             warehouse_id=test_wh.warehouse_id,
-            quantity=1,           # Only 1 physical item
-            reserved_quantity=0,  # 0 reserved => available = 1
+            quantity=5,           # 5 physical items in stock
+            reserved_quantity=0,  # 0 reserved => available = 5
         )
         self.db.add(test_inv)
         self.db.commit()
@@ -152,7 +188,7 @@ class TestDatabaseIntegrity(unittest.TestCase):
         def attempt_reservation(client_id):
             session = SessionLocal()
             try:
-                # Pessimistic Row Lock
+                # Pessimistic Row Lock: blocks concurrent readers until transaction commits/rolls back
                 inv = (
                     session.query(InventoryLevel)
                     .filter_by(inventory_id=test_inv.inventory_id)
@@ -162,8 +198,8 @@ class TestDatabaseIntegrity(unittest.TestCase):
                 available = inv.quantity - inv.reserved_quantity
                 time.sleep(0.05)  # Simulate small processing window
 
-                if available >= 1:
-                    inv.reserved_quantity += 1
+                if available >= 3:
+                    inv.reserved_quantity += 3
                     session.commit()
                     results.append((client_id, "SUCCESS"))
                 else:
@@ -183,12 +219,88 @@ class TestDatabaseIntegrity(unittest.TestCase):
         t1.join()
         t2.join()
 
-        # Check outcomes
+        # Check outcomes: exactly 1 client gets 3 items, 1 client rejected
         success_count = sum(1 for cid, res in results if res == "SUCCESS")
         out_of_stock_count = sum(1 for cid, res in results if res == "OUT_OF_STOCK")
 
-        self.assertEqual(success_count, 1, "Exactly one client must successfully reserve the last unit.")
-        self.assertEqual(out_of_stock_count, 1, "The second client must be rejected with OUT_OF_STOCK.")
+        self.assertEqual(success_count, 1, "With FOR UPDATE, exactly one client must succeed.")
+        self.assertEqual(out_of_stock_count, 1, "With FOR UPDATE, the second client must be rejected.")
+
+        # Cleanup
+        self.db.delete(test_inv)
+        self.db.delete(test_prod)
+        self.db.commit()
+
+    def test_concurrent_inventory_without_for_update_demonstrates_race_condition(self):
+        """
+        Demonstration Test WITHOUT Row Lock:
+        Proves that removing with_for_update() causes BOTH clients to read available = 5,
+        both reserve 3 units (total 6 > 5), resulting in overselling (race condition).
+        """
+        test_prod = Product(
+            product_id=uuid.uuid4(),
+            sku=f"RACE-DEMO-SKU-{uuid.uuid4().hex[:6]}",
+            name="Race Condition Strawberry Demo",
+            category="Trái cây tươi",
+            unit_price=Decimal("100000.00"),
+            unit="Hộp",
+        )
+        test_wh = self.db.query(Warehouse).first()
+        self.db.add(test_prod)
+        self.db.commit()
+
+        test_inv = InventoryLevel(
+            inventory_id=uuid.uuid4(),
+            product_id=test_prod.product_id,
+            warehouse_id=test_wh.warehouse_id,
+            quantity=5,
+            reserved_quantity=0,
+        )
+        self.db.add(test_inv)
+        self.db.commit()
+
+        results = []
+
+        def attempt_reservation_no_lock(client_id):
+            session = SessionLocal()
+            try:
+                # Ordinary SELECT WITHOUT with_for_update()
+                inv = (
+                    session.query(InventoryLevel)
+                    .filter_by(inventory_id=test_inv.inventory_id)
+                    .one()
+                )
+                available = inv.quantity - inv.reserved_quantity
+                time.sleep(0.05)  # Race window
+
+                if available >= 3:
+                    inv.reserved_quantity += 3
+                    session.commit()
+                    results.append((client_id, "SUCCESS"))
+                else:
+                    session.rollback()
+                    results.append((client_id, "OUT_OF_STOCK"))
+            except Exception as e:
+                session.rollback()
+                results.append((client_id, f"ERROR: {str(e)}"))
+            finally:
+                session.close()
+
+        t1 = threading.Thread(target=attempt_reservation_no_lock, args=("Client_A",))
+        t2 = threading.Thread(target=attempt_reservation_no_lock, args=("Client_B",))
+
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        # Outcome without lock: BOTH clients read available=5, both succeed (oversold 6 > 5)
+        success_count = sum(1 for cid, res in results if res == "SUCCESS")
+        self.assertEqual(
+            success_count,
+            2,
+            "Without FOR UPDATE, both clients succeed due to race condition, proving the flaw.",
+        )
 
         # Cleanup
         self.db.delete(test_inv)

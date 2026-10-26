@@ -76,6 +76,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint('quantity >= 0', name='chk_inventory_qty_non_negative'),
         sa.CheckConstraint('reserved_quantity >= 0', name='chk_reserved_qty_non_negative'),
+        sa.CheckConstraint('reserved_quantity <= quantity', name='chk_reserved_le_quantity'),
         sa.UniqueConstraint('product_id', 'warehouse_id', name='uq_product_warehouse'),
     )
     op.create_index('idx_inventory_lookup', 'inventory_levels', ['warehouse_id', 'product_id'], unique=False)
