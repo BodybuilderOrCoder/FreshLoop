@@ -1,5 +1,6 @@
 ﻿import os
 
+from app.routers.auth import router as auth_router
 from app.routers.inventory import router as inventory_router
 from app.routers.products import router as products_router
 from fastapi import FastAPI
@@ -40,6 +41,7 @@ app.add_middleware(
 
 app.include_router(products_router)
 app.include_router(inventory_router)
+app.include_router(auth_router)
 
 @app.get("/health", tags=["Health"])
 def health_check():
