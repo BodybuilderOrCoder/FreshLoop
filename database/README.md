@@ -130,3 +130,23 @@ python seed_mock_data.py --clean
   - `recency_score`: Exponential time-decay factor $e^{-\lambda \Delta t} \in (0, 1]$
   - `implicit_rating`: Pre-computed confidence score for ALS training matrix
 - **Cold-Start Fallback:** Query top products ordered by `implicit_rating DESC` from `purchase_history` when Redis cache has a MISS.
+
+---
+
+## 6. Week 2 Deliverables & Verification Tools
+
+- **Comprehensive Data Dictionary:** [`docs/data_dictionary.md`](docs/data_dictionary.md)
+- **Inventory Lifecycle & Concurrency Spec:** [`docs/inventory_lifecycle_spec.md`](docs/inventory_lifecycle_spec.md)
+- **Data Pipeline & Provenance (Train/Test Split):** [`docs/data_pipeline_provenance.md`](docs/data_pipeline_provenance.md)
+- **Running Integrity & Concurrency Test Suite:**
+  ```bash
+  python -m unittest database/tests/test_integrity_constraints.py
+  ```
+- **Running Performance Benchmarks (EXPLAIN ANALYZE):**
+  ```bash
+  python database/tests/benchmark_queries.py
+  ```
+- **Running the Pandas Interaction Pipeline:**
+  ```bash
+  python -m database.pipeline.extract_interactions
+  ```
