@@ -1,3 +1,4 @@
+
 import unittest
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -69,17 +70,14 @@ class RegisterRequestTests(unittest.TestCase):
             )
 
     def test_client_cannot_supply_role(self):
-        request = RegisterRequest(
-            email="customer@example.com",
-            password="correct-horse-123",
-            name="Mai Tien",
-            phone="0901000001",
-            # An unrecognized field is ignored by the default Pydantic config.
-            # The registration service will set CUSTOMER explicitly.
-            role="ADMIN",
-        )
-
-        self.assertFalse(hasattr(request, "role"))
+        with self.assertRaises(ValidationError):
+            RegisterRequest(
+                email="customer@example.com",
+                password="correct-horse-123",
+                name="Mai Tien",
+                phone="0901000001",
+                role="ADMIN",
+            )
 
 
 class UserResponseTests(unittest.TestCase):
@@ -98,9 +96,7 @@ class UserResponseTests(unittest.TestCase):
 
         self.assertNotIn("password", payload)
         self.assertNotIn("password_hash", payload)
-        self.assertNotIn("role", {
-            "email": payload["email"]
-        })
+        self.assertEqual(payload["role"], "CUSTOMER")
 
 
 if __name__ == "__main__":
