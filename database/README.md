@@ -37,7 +37,7 @@ erDiagram
 | **`users`** | `user_id` (UUID) | None | `email` UNIQUE, `phone` UNIQUE, `CHECK (role IN ('CUSTOMER', 'STAFF', 'ADMIN'))` |
 | **`products`** | `product_id` (UUID) | None | `sku` UNIQUE (indexed for barcode lookup), `CHECK (unit_price >= 0)` |
 | **`warehouses`** | `warehouse_id` (UUID) | None | `code` UNIQUE (e.g. `HUB-01`, `MART-02`, `MART-03`) |
-| **`inventory_levels`**| `inventory_id` (UUID) | `product_id` (RESTRICT)<br>`warehouse_id` (RESTRICT) | `UNIQUE (product_id, warehouse_id)`<br>`CHECK (quantity >= 0)`<br>`CHECK (reserved_quantity >= 0)` |
+| **`inventory_levels`**| `inventory_id` (UUID) | `product_id` (RESTRICT)<br>`warehouse_id` (RESTRICT) | `UNIQUE (product_id, warehouse_id)`<br>`CHECK (quantity >= 0)`<br>`CHECK (reserved_quantity >= 0)`<br>`CHECK (reserved_quantity <= quantity)` |
 | **`orders`** | `order_id` (UUID) | `user_id` (RESTRICT)<br>`warehouse_id` (RESTRICT) | `order_number` UNIQUE<br>`CHECK (status IN ('PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'))`<br>`CHECK (total_amount >= 0)` |
 | **`order_items`** | `order_item_id` (UUID)| `order_id` (CASCADE)<br>`product_id` (RESTRICT) | **Price Snapshotting:** `unit_price` captures historical price at checkout time.<br>`CHECK (quantity > 0)`<br>`CHECK (unit_price >= 0)` |
 | **`purchase_history`**| `history_id` (UUID) | `user_id` (CASCADE)<br>`product_id` (CASCADE) | **ML Feature Store:** `UNIQUE (user_id, product_id)`<br>Aggregates purchase frequency and exponential time decay ($e^{-\lambda \Delta t}$). |
