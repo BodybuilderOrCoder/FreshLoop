@@ -36,7 +36,9 @@ export default function Home() {
 
   const {
     products: catalogProducts,
+    warehouses,
     warehouse,
+    selectWarehouse,
     loading: catalogLoading,
     error: catalogError,
   } = useCatalog();
@@ -159,7 +161,44 @@ export default function Home() {
       <main>
         <Hero tr={tr} jumpToShop={jumpToShop} />
         <Benefits />
+        {warehouses.length > 0 && (
+          <section
+            className="container warehouse-selector"
+            aria-label="Warehouse selection"
+          >
+            <div className="warehouse-selector__inner">
+              <div className="warehouse-selector__field">
+                <label htmlFor="warehouse-selector">
+                  Choose warehouse
+                </label>
 
+                <select
+                  id="warehouse-selector"
+                  value={warehouse?.warehouse_id ?? ""}
+                  onChange={(event) => selectWarehouse(event.target.value)}
+                  disabled={catalogLoading}
+                >
+                  {warehouses.map((item) => (
+                    <option
+                      key={item.warehouse_id}
+                      value={item.warehouse_id}
+                    >
+                      {item.code} — {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <p className="warehouse-selector__note">
+                {catalogLoading
+                  ? "Loading inventory..."
+                  : warehouse
+                    ? `Showing stock for ${warehouse.code}`
+                    : "Select a warehouse to view inventory."}
+              </p>
+            </div>
+          </section>
+        )}
         {catalogLoading ? (
           <section className="container" role="status" aria-live="polite">
             Loading products and warehouse stock...
@@ -180,11 +219,8 @@ export default function Home() {
           <>
             {warehouse && (
               <div className="container">
-                <p className="section-count" aria-live="polite">
-                  Stock location:{" "}
-                  <strong>
-                    {warehouse.code} — {warehouse.name}
-                  </strong>
+                <p role="status">
+                  Stock location: {warehouse.code} — {warehouse.name}
                 </p>
               </div>
             )}

@@ -7,3 +7,55 @@
 @import "../styles/responsive.css";
 @import "../styles/theme.css";
 @import "../styles/extras.css";
+
+.warehouse-selector {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.warehouse-selector__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.warehouse-selector__field {
+  display: grid;
+  gap: 0.4rem;
+  width: min(100%, 28rem);
+}
+
+.warehouse-selector__field label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.warehouse-selector__field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #94a3b8;
+  border-radius: 0.6rem;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+}
+
+.warehouse-selector__field select:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.warehouse-selector__field select:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.warehouse-selector__note {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.875rem;
+}
