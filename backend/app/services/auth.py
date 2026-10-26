@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.schema import User
 from app.schemas.auth import RegisterRequest
-from app.security.passwords import hash_password
+from app.security.passwords import hash_password, verify_password
 
 
 class DuplicateUserError(Exception):
@@ -62,4 +62,26 @@ def register_customer(
         ) from None
 
     db.refresh(user)
+    return user
+
+def authenticate_user(
+    db: Session,
+    email: str,
+    password: str,
+) -> User | None:
+    """Return the user only when the email and password are valid."""
+    normalized_email = email.strip().lower()
+
+    user = db.scalar(
+        select(User).where(
+            func.lower(User.email) == normalized_email
+        )
+    )
+
+    if user is None:
+        return None
+
+    if not verify_password(password, user.password_hash):
+        return None
+
     return user
