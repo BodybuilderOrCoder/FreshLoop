@@ -38,14 +38,16 @@ export function useCatalog() {
     let cancelled = false;
 
     async function loadWarehouses() {
-      setError("");
 
       try {
         const result = await getWarehouses();
         const activeWarehouses = getActiveWarehouses(result);
 
         // Throws when there is no active warehouse.
-        const defaultWarehouse = chooseDefaultWarehouse(result);
+        let savedId: string | null = null;
+        try { savedId = sessionStorage.getItem("freshloop:warehouse"); } catch { /* Storage is optional. */ }
+        const defaultWarehouse = activeWarehouses.find((item) => item.warehouse_id === savedId)
+          ?? chooseDefaultWarehouse(result);
 
         if (cancelled) return;
 
@@ -89,24 +91,23 @@ export function useCatalog() {
       return;
     }
 
-    const requestId = requestGuard.current.begin();
-
-    setLoading(true);
-    setError("");
+    const guard = requestGuard.current;
+    const requestId = guard.begin();
+    const controller = new AbortController();
 
     async function loadInventory() {
       try {
-        const inventory = await getWarehouseProducts(warehouseId);
+        const inventory = await getWarehouseProducts(warehouseId, controller.signal);
         const mappedProducts = mapInventoryProducts(inventory);
 
         // Ignore responses belonging to an older request.
-        if (!requestGuard.current.isLatest(requestId)) {
+        if (!guard.isLatest(requestId)) {
           return;
         }
 
         setProducts(mappedProducts);
       } catch (err) {
-        if (!requestGuard.current.isLatest(requestId)) {
+        if (!guard.isLatest(requestId)) {
           return;
         }
 
@@ -121,7 +122,7 @@ export function useCatalog() {
         // after a temporary network or API failure.
       } finally {
         // Only the latest request may finish the loading state.
-        if (requestGuard.current.isLatest(requestId)) {
+        if (guard.isLatest(requestId)) {
           setLoading(false);
         }
       }
@@ -132,7 +133,8 @@ export function useCatalog() {
     return () => {
       // Invalidate this request when the warehouse changes
       // or this effect is cleaned up.
-      requestGuard.current.invalidate(requestId);
+      guard.invalidate(requestId);
+      controller.abort();
     };
   }, [warehouseId, warehouses]);
 
@@ -143,6 +145,9 @@ export function useCatalog() {
       );
 
       if (exists && nextWarehouseId !== warehouseId) {
+        setLoading(true);
+        setError("");
+        try { sessionStorage.setItem("freshloop:warehouse", nextWarehouseId); } catch { /* Storage is optional. */ }
         setWarehouseId(nextWarehouseId);
       }
     },

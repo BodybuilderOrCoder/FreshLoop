@@ -135,3 +135,30 @@ test("network failures return a connection error", async () => {
     },
   );
 });
+
+
+test("loads all inventory pages and deduplicates product IDs", async () => {
+  const offsets = [];
+  await withMockFetch(async (url) => {
+    const query = new URL(url).searchParams;
+    assert.equal(query.get("limit"), "100");
+    const skip = Number(query.get("skip"));
+    offsets.push(skip);
+    return { ok: true, json: async () => skip === 0
+      ? Array.from({ length: 100 }, (_, i) => ({ product_id: `p${i}` }))
+      : [{ product_id: "p99" }, { product_id: "p100" }] };
+  }, async () => {
+    assert.equal((await getWarehouseProducts("warehouse-1")).length, 101);
+    assert.deepEqual(offsets, [0, 100]);
+  });
+});
+
+test("does not return partial inventory when a later page fails", async () => {
+  await withMockFetch(async (url) => ({
+    ok: new URL(url).searchParams.get("skip") === "0",
+    status: 503, statusText: "Service Unavailable",
+    json: async () => Array.from({ length: 100 }, (_, i) => ({ product_id: `p${i}` })),
+  }), async () => {
+    await assert.rejects(getWarehouseProducts("warehouse-1"), /503/);
+  });
+});

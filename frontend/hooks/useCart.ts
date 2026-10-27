@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   products as mockProducts,
   type Product,
@@ -15,11 +15,12 @@ import {
 export function useCart(catalogProducts: Product[] = mockProducts) {
   const [cart, setCart] = useState<Record<number, number>>({});
 
-  useEffect(() => {
-    setCart((previousCart) =>
-      reconcileCart(previousCart, catalogProducts),
-    );
-  }, [catalogProducts]);
+  // Reconcile during rendering when the catalog changes, before children use it.
+  const [previousCatalog, setPreviousCatalog] = useState(catalogProducts);
+  if (previousCatalog !== catalogProducts) {
+    setPreviousCatalog(catalogProducts);
+    setCart(reconcileCart(cart, catalogProducts));
+  }
 
   const { count, subtotal, delivery } = calculateCartSummary(
     cart,

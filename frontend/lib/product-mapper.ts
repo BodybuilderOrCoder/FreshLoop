@@ -38,7 +38,7 @@ function stableNumericId(value: string): number {
 function mapCategory(
   item: ProductInventory,
 ): Exclude<Category, "All"> {
-  const sourceCategory = item.category.toLowerCase();
+  const sourceCategory = item.category.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0111/g, "d");
   const sku = item.sku.toUpperCase();
 
   // Peanut butter belongs in Pantry, despite the broad source category.
@@ -53,8 +53,12 @@ function mapCategory(
     return "Produce";
   }
 
-  if (sourceCategory.includes("sua")) {
+  if (sku.startsWith("EGG-") || sourceCategory.includes("trung") || sourceCategory.includes("sua")) {
     return "Dairy & Eggs";
+  }
+
+  if (sourceCategory.includes("thit") || sourceCategory.includes("hai san")) {
+    return "Meat & Seafood";
   }
 
   if (sourceCategory.includes("do uong")) {

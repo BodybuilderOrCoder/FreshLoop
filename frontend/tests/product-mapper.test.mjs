@@ -36,6 +36,10 @@ test("maps backend identity, price, and display fields", () => {
 
 test("maps backend categories to supported UI categories", () => {
   const fixtures = [
+    { sku: "MEAT-BEEF", category: "Thit & Hai san", expected: "Meat & Seafood" },
+    { sku: "FISH", category: "Th\u1ecbt & H\u1ea3i s\u1ea3n", expected: "Meat & Seafood" },
+    { sku: "BEV", category: "\u0110\u1ed3 u\u1ed1ng", expected: "Beverages" },
+    { sku: "EGG-10", category: "Thit & Hai san", expected: "Dairy & Eggs" },
     { sku: "VEG-CABBAGE-1KG", category: "Rau cu qua", expected: "Produce" },
     { sku: "FRUIT-AVOCADO-1KG", category: "Trai cay tuoi", expected: "Produce" },
     { sku: "DAIRY-BUTTER-227G", category: "Sua & San pham tu sua", expected: "Dairy & Eggs" },

@@ -25,15 +25,17 @@ export type ProductInventory = {
   available_stock: number;
 };
 
-async function fetchJson<T>(path: string): Promise<T> {
+async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   let response: Response;
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
+      signal,
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) throw error;
     throw new Error(
       "Cannot connect to the backend. Check that FastAPI is running.",
     );
@@ -48,18 +50,24 @@ async function fetchJson<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function getWarehouses(): Promise<Warehouse[]> {
-  return fetchJson<Warehouse[]>("/api/warehouses");
+export function getWarehouses(signal?: AbortSignal): Promise<Warehouse[]> {
+  return fetchJson<Warehouse[]>("/api/warehouses", signal);
 }
 
-export function getWarehouseProducts(
+export async function getWarehouseProducts(
   warehouseId: string,
+  signal?: AbortSignal,
 ): Promise<ProductInventory[]> {
-  if (!warehouseId.trim()) {
-    return Promise.reject(new Error("A warehouse must be selected."));
-  }
+  if (!warehouseId.trim()) throw new Error("A warehouse must be selected.");
 
-  return fetchJson<ProductInventory[]>(
-    `/api/warehouses/${encodeURIComponent(warehouseId)}/products`,
-  );
+  const limit = 100;
+  const products = new Map<string, ProductInventory>();
+  for (let skip = 0; ; skip += limit) {
+    const page = await fetchJson<ProductInventory[]>(
+      `/api/warehouses/${encodeURIComponent(warehouseId)}/products?skip=${skip}&limit=${limit}`,
+      signal,
+    );
+    for (const product of page) products.set(product.product_id, product);
+    if (page.length < limit) return [...products.values()];
+  }
 }

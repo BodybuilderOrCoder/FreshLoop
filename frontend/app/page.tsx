@@ -175,7 +175,11 @@ export default function Home() {
                 <select
                   id="warehouse-selector"
                   value={warehouse?.warehouse_id ?? ""}
-                  onChange={(event) => selectWarehouse(event.target.value)}
+                  onChange={(event) => {
+                    setCartOpen(false);
+                    setCheckout(false);
+                    selectWarehouse(event.target.value);
+                  }}
                   disabled={catalogLoading}
                 >
                   {warehouses.map((item) => (
@@ -192,7 +196,9 @@ export default function Home() {
               <p className="warehouse-selector__note">
                 {catalogLoading
                   ? "Loading inventory..."
-                  : warehouse
+                  : catalogError
+                    ? "Inventory unavailable for the selected warehouse."
+                    : warehouse
                     ? `Showing stock for ${warehouse.code}`
                     : "Select a warehouse to view inventory."}
               </p>
@@ -267,7 +273,7 @@ export default function Home() {
         </div>
       )}
 
-      {cartOpen && (
+      {cartOpen && !catalogLoading && !catalogError && (
         <CartDrawer
           tr={tr}
           products={catalogProducts}
