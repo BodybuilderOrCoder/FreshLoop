@@ -28,3 +28,5 @@ TRAIN_INTERACTIONS_PATH = os.getenv(
     "REC_TRAIN_INTERACTIONS_PATH",
     str(_DEFAULT_TRAIN_PATH),
 )
+
+POOL_SIZE = int(os.getenv("REC_POOL_SIZE", "30"))
