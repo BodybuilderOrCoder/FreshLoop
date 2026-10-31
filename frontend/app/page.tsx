@@ -1,13 +1,15 @@
 
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import type { Category, Product } from "../data/products";
 import { useCatalog } from "../hooks/useCatalog";
 import { useCart } from "../hooks/useCart";
 import { useFavorites } from "../hooks/useFavorites";
 import { vi } from "../utils/presentation";
+import { getRecommendations } from "../lib/api";
 
 import Header from "../components/Header";
 import Hero from "../components/Hero";
@@ -43,8 +45,12 @@ export default function Home() {
     error: catalogError,
   } = useCatalog();
 
-  const { cart, count, subtotal, delivery, changeQty } =
+  const { cart, count, subtotal, delivery, changeQty, clearCart } =
     useCart(catalogProducts);
+  const [recommendationIds, setRecommendationIds] = useState<string[]>([]);
+  const [recommendationError, setRecommendationError] = useState("");
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const router = useRouter();
 
   const {
     favorites,
@@ -95,6 +101,46 @@ export default function Home() {
     tr,
   ]);
 
+  useEffect(() => {
+    if (!warehouse?.warehouse_id) return;
+    const userId = process.env.NEXT_PUBLIC_DEMO_USER_ID;
+
+    if (!userId) return;
+
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      if (controller.signal.aborted) return [];
+      setRecommendationsLoading(true);
+      setRecommendationError("");
+      return getRecommendations(userId, warehouse.warehouse_id, controller.signal);
+    })
+      .then((items) => {
+        if (!controller.signal.aborted) {
+          setRecommendationIds(items.map((item) => item.product_id));
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setRecommendationIds([]);
+          setRecommendationError(
+            error instanceof Error ? error.message : "Recommendations are unavailable.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRecommendationsLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [warehouse?.warehouse_id]);
+
+  const recommendedProducts = useMemo(
+    () => recommendationIds
+      .map((id) => catalogProducts.find((product) => product.backendProductId === id))
+      .filter((product): product is Product => Boolean(product && product.stock > 0)),
+    [catalogProducts, recommendationIds],
+  );
+
   const add = (product: Product) => {
     if (product.stock <= 0) {
       setNotice(`${tr(product.name)} is out of stock`);
@@ -122,17 +168,13 @@ export default function Home() {
   };
 
   const addReorder = () => {
-    const repeatProducts = catalogProducts.filter(
-      (product) => product.repeat && product.stock > 0,
-    );
-
-    if (repeatProducts.length === 0) {
-      setNotice("Quick Reorder is unavailable until purchase history is connected.");
+    if (recommendedProducts.length === 0) {
+      setNotice("No available Quick Reorder items yet.");
       window.setTimeout(() => setNotice(""), 2500);
       return;
     }
 
-    repeatProducts.forEach((product) => {
+    recommendedProducts.forEach((product) => {
       changeQty(product.id, 1);
     });
 
@@ -255,8 +297,10 @@ export default function Home() {
 
             <QuickReorder
               tr={tr}
-              products={catalogProducts}
+              products={recommendedProducts}
               addReorder={addReorder}
+              loading={recommendationsLoading}
+              error={recommendationError || (!process.env.NEXT_PUBLIC_DEMO_USER_ID ? "Sign in to see your Quick Reorder picks." : "")}
             />
           </>
         )}
@@ -277,6 +321,7 @@ export default function Home() {
         <CartDrawer
           tr={tr}
           products={catalogProducts}
+            warehouseId={warehouse?.warehouse_id ?? ""}
           jumpToShop={jumpToShop}
           count={count}
           setCartOpen={setCartOpen}
@@ -288,7 +333,10 @@ export default function Home() {
           setAddress={setAddress}
           subtotal={subtotal}
           delivery={delivery}
-          setNotice={setNotice}
+            onOrderCreated={(orderId) => {
+              clearCart();
+              router.push(`/orders/${orderId}`);
+            }}
         />
       )}
     </div>

@@ -3,6 +3,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  createOrder,
+  getRecommendations,
   getWarehouses,
   getWarehouseProducts,
 } from "../lib/api.ts";
@@ -134,6 +136,38 @@ test("network failures return a connection error", async () => {
       );
     },
   );
+});
+
+test("createOrder sends the agreed commerce payload", async () => {
+  const input = {
+    warehouse_id: "warehouse-1",
+    delivery_address: "1 Fresh Street",
+    items: [{ product_id: "product-1", quantity: 2 }],
+  };
+  const order = { order_id: "order-1", status: "PENDING", total_amount: 50000, created_at: "2026-11-01", items: [] };
+
+  await withMockFetch(async (url, options) => {
+    assert.equal(new URL(String(url)).pathname, "/api/orders");
+    assert.equal(options.method, "POST");
+    assert.deepEqual(JSON.parse(options.body), input);
+    return { ok: true, json: async () => order };
+  }, async () => {
+    assert.deepEqual(await createOrder(input), order);
+  });
+});
+
+test("getRecommendations accepts an items response envelope", async () => {
+  await withMockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    assert.equal(parsed.pathname, "/api/recommendations/customer-1");
+    assert.equal(parsed.searchParams.get("warehouse_id"), "warehouse-1");
+    return { ok: true, json: async () => ({ items: [{ product_id: "product-1", score: 0.9 }] }) };
+  }, async () => {
+    assert.deepEqual(
+      await getRecommendations("customer-1", "warehouse-1"),
+      [{ product_id: "product-1", score: 0.9 }],
+    );
+  });
 });
 
 

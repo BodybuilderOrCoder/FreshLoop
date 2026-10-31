@@ -59,3 +59,43 @@
   color: #64748b;
   font-size: 0.875rem;
 }
+
+.checkout-error,
+.journey-error {
+  margin: 0.75rem 0;
+  color: #b42318;
+  font-size: 0.9rem;
+}
+
+.journey-page {
+  min-height: 70vh;
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+}
+
+.journey-back {
+  display: inline-block;
+  margin-bottom: 2rem;
+  color: #166534;
+  font-weight: 700;
+}
+
+.journey-card {
+  width: min(100%, 42rem);
+  margin-top: 1.25rem;
+  padding: 2rem;
+  border: 1px solid #d1d5db;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 12px 28px rgb(15 23 42 / 8%);
+}
+
+.journey-list {
+  padding-left: 1.25rem;
+}
+
+.journey-total {
+  margin-top: 1.5rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}

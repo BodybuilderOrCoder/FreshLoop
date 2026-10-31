@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   products as mockProducts,
   type Product,
@@ -14,6 +14,30 @@ import {
 
 export function useCart(catalogProducts: Product[] = mockProducts) {
   const [cart, setCart] = useState<Record<number, number>>({});
+  const restored = useRef(false);
+
+  useEffect(() => {
+    const restore = window.setTimeout(() => {
+      try {
+        const saved = window.sessionStorage.getItem("freshloop:cart");
+        if (saved) setCart(JSON.parse(saved) as Record<number, number>);
+      } catch {
+        // Session storage is a convenience; shopping still works without it.
+      } finally {
+        restored.current = true;
+      }
+    }, 0);
+    return () => window.clearTimeout(restore);
+  }, []);
+
+  useEffect(() => {
+    if (!restored.current) return;
+    try {
+      window.sessionStorage.setItem("freshloop:cart", JSON.stringify(cart));
+    } catch {
+      // Ignore unavailable browser storage.
+    }
+  }, [cart]);
 
   // Reconcile during rendering when the catalog changes, before children use it.
   const [previousCatalog, setPreviousCatalog] = useState(catalogProducts);
@@ -38,11 +62,14 @@ export function useCart(catalogProducts: Product[] = mockProducts) {
     );
   };
 
+  const clearCart = () => setCart({});
+
   return {
     cart,
     count,
     subtotal,
     delivery,
     changeQty,
+    clearCart,
   };
 }

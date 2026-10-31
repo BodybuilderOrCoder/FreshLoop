@@ -11,6 +11,7 @@ import {
 import {
   getWarehouses,
   getWarehouseProducts,
+  getInventoryEventsUrl,
   type Warehouse,
 } from "../lib/api";
 
@@ -158,6 +159,35 @@ export function useCatalog() {
     warehouses.find(
       (item) => item.warehouse_id === warehouseId,
     ) ?? null;
+
+  // Inventory events are authoritative. Refreshing after each event keeps
+  // product metadata and stock correct while the event payload evolves.
+  useEffect(() => {
+    if (!warehouseId) return;
+
+    const events = new EventSource(getInventoryEventsUrl(warehouseId));
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const refresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        void getWarehouseProducts(warehouseId)
+          .then(mapInventoryProducts)
+          .then(setProducts)
+          .catch(() => {
+            // Preserve the last usable catalog after a transient failure.
+          });
+      }, 150);
+    };
+
+    events.addEventListener("inventory.snapshot", refresh);
+    events.addEventListener("inventory.changed", refresh);
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      events.close();
+    };
+  }, [warehouseId]);
 
   return {
     products,

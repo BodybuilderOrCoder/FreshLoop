@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Category, Product } from "../data/products";
+import { createOrder } from "../lib/api";
 import { money } from "../utils/presentation";
 import type { Translate } from "../utils/presentation";
 type Props = {
@@ -16,7 +17,8 @@ type Props = {
   setAddress: (value: string) => void;
   subtotal: number;
   delivery: number;
-  setNotice: (value: string) => void;
+  warehouseId: string;
+  onOrderCreated: (orderId: string) => void;
 };
 export default function CartDrawer({
   tr,
@@ -32,9 +34,12 @@ export default function CartDrawer({
   setAddress,
   subtotal,
   delivery,
-  setNotice,
+  warehouseId,
+  onOrderCreated,
 }: Props) {
   const cartDialogRef = useRef<HTMLDialogElement>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     const dialog = cartDialogRef.current;
@@ -60,6 +65,42 @@ export default function CartDrawer({
       }
     };
   }, []);
+
+  const submitOrder = async () => {
+    if (!address.trim()) {
+      setSubmitError("Please enter a delivery address.");
+      return;
+    }
+
+    const items = products
+      .filter((product) => cart[product.id] && product.backendProductId)
+      .map((product) => ({
+        product_id: product.backendProductId!,
+        quantity: cart[product.id],
+      }));
+
+    if (!warehouseId || items.length !== Object.keys(cart).length) {
+      setSubmitError("This cart contains an unavailable product. Refresh the catalog and try again.");
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const order = await createOrder({
+        warehouse_id: warehouseId,
+        delivery_address: address.trim(),
+        items,
+      });
+      onOrderCreated(order.order_id);
+      setCartOpen(false);
+      setCheckout(false);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Unable to place the order.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <dialog
@@ -96,10 +137,7 @@ export default function CartDrawer({
         </div>
         {checkout ? (
           <div className="checkout-preview">
-            <p>
-              This is a frontend-only checkout demo. No order or payment will be
-              submitted.
-            </p>
+            <p>Review your delivery details before placing the order.</p>
             <label>
               {tr("Delivery address")}
               <input
@@ -120,15 +158,13 @@ export default function CartDrawer({
               <span>Total</span>
               <strong>{money(subtotal + delivery)}</strong>
             </div>
+            {submitError && <p className="checkout-error" role="alert">{submitError}</p>}
             <button
               className="primary-button full"
-              onClick={() => {
-                setNotice("Checkout preview only — no order was placed");
-                setCartOpen(false);
-                setCheckout(false);
-              }}
+              onClick={() => void submitOrder()}
+              disabled={submitting}
             >
-              Finish demo →
+              {submitting ? "Placing order..." : "Place order"}
             </button>
             <button className="back-button" onClick={() => setCheckout(false)}>
               ← Back to cart

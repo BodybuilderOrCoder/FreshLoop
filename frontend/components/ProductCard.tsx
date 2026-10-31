@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Product } from "../data/products";
 import { money, type Translate } from "../utils/presentation";
 type Props = {
@@ -63,7 +64,11 @@ export default function ProductCard({
       </div>
       <div className="product-info">
         <span className="product-category">{tr(p.category)}</span>
-        <h3>{tr(p.name)}</h3>
+        {p.backendProductId ? (
+          <h3><Link href={`/product/${p.backendProductId}`}>{tr(p.name)}</Link></h3>
+        ) : (
+          <h3>{tr(p.name)}</h3>
+        )}
         <p>{tr(p.detail)}</p>
         <div className="product-bottom">
           <div>

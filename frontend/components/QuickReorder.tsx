@@ -2,18 +2,20 @@ import type { Product } from "../data/products";
 import { money } from "../utils/presentation";
 import type { Translate } from "../utils/presentation";
 type Props = {
-  products: Product[]
+  products: Product[];
   tr: Translate;
   addReorder: () => void;
+  loading?: boolean;
+  error?: string;
 };
 export default function QuickReorder({
   tr,
   products,
   addReorder,
+  loading = false,
+  error = "",
 }: Props) {
-  const repeatProducts = products.filter(
-    (product) => product.repeat && product.stock > 0,
-  );
+  const repeatProducts = products.filter((product) => product.stock > 0);
   return (
     <section className="reorder-section" id="reorder">
       <div className="container reorder-inner">
@@ -28,18 +30,19 @@ export default function QuickReorder({
             Skip the repeat searching. Your favorite essentials are one tap away with
             Quick Reorder.
           </p>
-          <div className="reorder-note"> Demo preview using sample repeat purchases</div>
-          <button className="primary-button" onClick={addReorder}>
+          <div className="reorder-note">
+            {loading ? "Loading your recommendations..." : error || "Personalized from your purchase history"}
+          </div>
+          <button className="primary-button" onClick={addReorder} disabled={loading || repeatProducts.length === 0}>
             Add my usuals <span>↗</span>
           </button>
         </div>
         <div className="reorder-panel">
           <div className="reorder-panel-head">
             <span>↻ Your quick reorder</span>
-            <span className="reorder-demo">DEMO</span>
+            <span className="reorder-demo">TOP PICKS</span>
           </div>
-          {products
-            .filter((p) => p.repeat)
+          {repeatProducts
             .map((p) => (
               <div className="reorder-row" key={p.id}>
                 <span className="reorder-thumb" style={{ background: p.color }}>
@@ -53,7 +56,7 @@ export default function QuickReorder({
               </div>
             ))}
           <div className="reorder-total">
-            <span>4 everyday favorites</span>
+            <span>{repeatProducts.length} everyday favorites</span>
             <strong>
               {money(repeatProducts.reduce((s, p) => s + p.price, 0))}
             </strong>
