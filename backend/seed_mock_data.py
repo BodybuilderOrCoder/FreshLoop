@@ -28,6 +28,19 @@ TARGET_PRODUCTS = 200
 # Fixed seed for 100% reproducible results
 RANDOM_SEED = 42
 
+# Dedicated FreshLoop Namespace for deterministic UUIDv5 generation
+# Guarantees 100% identical UUIDs across all machines, OSs, and runs
+NAMESPACE_FRESHLOOP = uuid.UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+
+
+def gen_uuid(entity: str, key: str) -> uuid.UUID:
+    """Generates a reproducible UUIDv5 for a given entity type and string key."""
+    return uuid.uuid5(NAMESPACE_FRESHLOOP, f"{entity}:{key}")
+
+
+# Fixed anchor datetime so generated timestamps and recency scores are 100% deterministic
+BASE_REFERENCE_TIME = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+
 VIETNAMESE_LAST_NAMES = [
     "Nguyen", "Tran", "Le", "Pham", "Hoang", "Huynh", "Phan", "Vu", "Vo",
     "Dang", "Bui", "Do", "Ho", "Ngo", "Duong", "Ly"
@@ -212,7 +225,7 @@ def seed_database(clean=False):
         print("\n>>> 1. Creating 3 Core Warehouses...")
         warehouses = [
             Warehouse(
-                warehouse_id=uuid.uuid4(),
+                warehouse_id=gen_uuid("warehouse", "HUB-01"),
                 code="HUB-01",
                 name="Central Hub Quan 1",
                 location="123 Le Duan, Ben Nghe, Quan 1, TP.HCM",
@@ -220,7 +233,7 @@ def seed_database(clean=False):
                 is_active=True,
             ),
             Warehouse(
-                warehouse_id=uuid.uuid4(),
+                warehouse_id=gen_uuid("warehouse", "MART-02"),
                 code="MART-02",
                 name="FreshLoop Mini Mart Quan 7",
                 location="88 Nguyen Thi Thap, Tan Phu, Quan 7, TP.HCM",
@@ -228,7 +241,7 @@ def seed_database(clean=False):
                 is_active=True,
             ),
             Warehouse(
-                warehouse_id=uuid.uuid4(),
+                warehouse_id=gen_uuid("warehouse", "MART-03"),
                 code="MART-03",
                 name="FreshLoop Mini Mart Binh Thanh",
                 location="45 Xo Viet Nghe Tinh, Phuong 19, Binh Thanh, TP.HCM",
@@ -250,7 +263,7 @@ def seed_database(clean=False):
 
         for cat, name, sku, price, unit in full_catalog:
             p = Product(
-                product_id=uuid.uuid4(),
+                product_id=gen_uuid("product", sku),
                 sku=sku,
                 name=name,
                 category=cat,
@@ -281,7 +294,7 @@ def seed_database(clean=False):
 
                 inventory_records.append(
                     InventoryLevel(
-                        inventory_id=uuid.uuid4(),
+                        inventory_id=gen_uuid("inventory", f"{wh.code}:{p.sku}"),
                         product_id=p.product_id,
                         warehouse_id=wh.warehouse_id,
                         quantity=qty,
@@ -299,7 +312,7 @@ def seed_database(clean=False):
         users = []
         users.append(
             User(
-                user_id=uuid.uuid4(),
+                user_id=gen_uuid("user", "admin@freshloop.vn"),
                 email="admin@freshloop.vn",
                 password_hash="pbkdf2:sha256:admin_secret_hash",
                 name="Tran Huu Thang (Admin)",
@@ -310,7 +323,7 @@ def seed_database(clean=False):
         )
         users.append(
             User(
-                user_id=uuid.uuid4(),
+                user_id=gen_uuid("user", "staff@freshloop.vn"),
                 email="staff@freshloop.vn",
                 password_hash="pbkdf2:sha256:staff_secret_hash",
                 name="Nguyen Vu Hieu (Staff)",
@@ -327,7 +340,7 @@ def seed_database(clean=False):
             street = f"{random.randint(10, 450)} {random.choice(STREETS)}, {random.choice(DISTRICTS)}, TP.HCM"
             users.append(
                 User(
-                    user_id=uuid.uuid4(),
+                    user_id=gen_uuid("user", email_addr),
                     email=email_addr,
                     password_hash=f"pbkdf2:sha256:mock_hash_user_{i}",
                     name=full_name,
@@ -374,7 +387,7 @@ def seed_database(clean=False):
         # 6. GENERATE 8-12 ORDERS PER USER ACROSS 60-90 DAYS (~1 order/week)
         # -------------------------------------------------------------
         print("\n>>> 6. Generating 8-12 Orders per User spread over 60-90 days...")
-        now = datetime.now(timezone.utc)
+        now = BASE_REFERENCE_TIME
         orders = []
         order_items = []
         order_counter = 1
@@ -430,10 +443,11 @@ def seed_database(clean=False):
                 purchased_in_this_order.extend(random.sample(outside_pool, k=num_outside))
 
                 # Build Order and OrderItems
-                order_id = uuid.uuid4()
+                order_num_str = f"ORD-2026-{order_counter:05d}"
+                order_id = gen_uuid("order", order_num_str)
                 total_order_amount = Decimal("0.00")
 
-                for prod in purchased_in_this_order:
+                for item_idx, prod in enumerate(purchased_in_this_order, start=1):
                     qty = random.randint(1, 3)
                     unit_p = prod.unit_price  # Price snapshotting
                     tot_p = unit_p * qty
@@ -441,7 +455,7 @@ def seed_database(clean=False):
 
                     order_items.append(
                         OrderItem(
-                            order_item_id=uuid.uuid4(),
+                            order_item_id=gen_uuid("order_item", f"{order_num_str}:{item_idx}"),
                             order_id=order_id,
                             product_id=prod.product_id,
                             quantity=qty,
@@ -455,7 +469,7 @@ def seed_database(clean=False):
                         order_id=order_id,
                         user_id=u.user_id,
                         warehouse_id=wh.warehouse_id,
-                        order_number=f"ORD-2026-{order_counter:05d}",
+                        order_number=order_num_str,
                         status=status,
                         total_amount=total_order_amount,
                         delivery_address=u.address,
@@ -508,7 +522,7 @@ def seed_database(clean=False):
 
             purchase_history_records.append(
                 PurchaseHistory(
-                    history_id=uuid.uuid4(),
+                    history_id=gen_uuid("history", f"{u_id}:{p_id}"),
                     user_id=u_id,
                     product_id=p_id,
                     total_purchases=order_frequency,

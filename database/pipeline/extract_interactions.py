@@ -13,6 +13,7 @@ Purpose:
 
 import os
 import sys
+import uuid
 from datetime import datetime, timezone
 import pandas as pd
 import numpy as np
@@ -61,10 +62,21 @@ def clean_and_preprocess(df: pd.DataFrame) -> pd.DataFrame:
     # Rule 2: Quantity must be positive
     df = df[df['quantity'] > 0]
     
-    # Rule 3: Ensure UUIDs are strings
-    df['order_id'] = df['order_id'].astype(str)
-    df['user_id'] = df['user_id'].astype(str)
-    df['product_id'] = df['product_id'].astype(str)
+    # Rule 3: Ensure canonical standard UUID strings (hyphenated 8-4-4-4-12)
+    def to_canonical_uuid(val):
+        if pd.isna(val):
+            return val
+        s = str(val).strip()
+        try:
+            if '-' in s:
+                return str(uuid.UUID(s))
+            return str(uuid.UUID(hex=s))
+        except Exception:
+            return s
+
+    df['order_id'] = df['order_id'].apply(to_canonical_uuid)
+    df['user_id'] = df['user_id'].apply(to_canonical_uuid)
+    df['product_id'] = df['product_id'].apply(to_canonical_uuid)
     
     # Rule 4: Group duplicates in same order (if any)
     df = df.groupby(['order_id', 'user_id', 'product_id', 'created_at'], as_index=False).agg({
