@@ -85,3 +85,27 @@ $$\text{Average Orders Per User} \approx 9.35 \quad \implies \quad \text{Average
   - `total_qty = 14`
   - `implicit_rating = 7 \times e^{-0.05 \times \Delta t}`
 - This aggregation is standard practice in Collaborative Filtering and is essential for preventing skewed loss calculations during Matrix Factorization.
+
+
+---
+
+## 7. Deterministic UUIDv5 & Cross-Machine Reproducibility Guarantee
+
+To prevent ID mismatch across teammate environments:
+- **Problem with `uuid4()`:** Generates pseudorandom UUIDs based on OS entropy, ignoring `random.seed(42)`. Running seed scripts on different machines generates mismatched UUIDs, causing joins between local database tables and checked-in CSV artifacts to fail.
+- **Solution (UUIDv5 Determinism):** All entity UUIDs are generated using SHA-1 hashing over a dedicated project namespace (`NAMESPACE_FRESHLOOP = uuid.UUID('f47ac10b-58cc-4372-a567-0e02b2c3d479')`):
+  - **Products:** `uuid5(NAMESPACE, f"product:{sku}")` (e.g., `VEG-TOMATO-500G` $\rightarrow$ `6fa18754-f7db-50e2-989b-3be069d59583`).
+  - **Users:** `uuid5(NAMESPACE, f"user:{email}")` (e.g., `customer045@freshloop.vn` $\rightarrow$ `037a8712-c34c-5e3d-aba9-fb4c7d7fce7e`).
+  - **Warehouses:** `uuid5(NAMESPACE, f"warehouse:{code}")` (e.g., `HUB-01` $\rightarrow$ `f25018c6-faf3-53c8-bcb3-2a94c1b3e4b8`).
+  - **Orders:** `uuid5(NAMESPACE, f"order:{order_number}")`.
+- **Anchor Timestamp:** Base reference time fixed at `2026-10-25 12:00:00 UTC` ensures decay scores and dates are bit-for-bit identical regardless of run date.
+
+### Standard Team Commands
+
+```powershell
+# 1. Clean existing database and seed deterministic mock data
+python backend/seed_mock_data.py --clean
+
+# 2. Extract train/test split datasets matching the seeded DB
+python -m database.pipeline.extract_interactions
+```
