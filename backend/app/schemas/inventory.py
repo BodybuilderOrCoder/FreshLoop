@@ -1,8 +1,12 @@
-
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+)
 
 
 class WarehouseResponse(BaseModel):
@@ -28,6 +32,28 @@ class ProductInventoryResponse(BaseModel):
     is_available: bool
 
     warehouse_id: UUID
+    quantity: int = Field(ge=0)
+    reserved_quantity: int = Field(ge=0)
+    available_stock: int = Field(ge=0)
+
+
+class StockUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    quantity_delta: int = Field(strict=True)
+
+    @field_validator("quantity_delta")
+    @classmethod
+    def validate_quantity_delta(cls, value: int) -> int:
+        if value == 0:
+            raise ValueError("quantity_delta must not be zero")
+        return value
+
+
+class StockUpdateResponse(BaseModel):
+    inventory_id: UUID
+    warehouse_id: UUID
+    product_id: UUID
     quantity: int = Field(ge=0)
     reserved_quantity: int = Field(ge=0)
     available_stock: int = Field(ge=0)

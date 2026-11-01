@@ -4,24 +4,29 @@ from uuid import UUID
 from fastapi import (
     APIRouter,
     Depends,
+    Header,
     HTTPException,
     Query,
     Request,
 )
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import InventoryLevel, Product, Warehouse
+from app.dependencies.auth import require_staff_or_admin
+from app.models import InventoryLevel, Product, User, Warehouse
 from app.schemas.inventory import (
     ProductInventoryResponse,
+    StockUpdateRequest,
+    StockUpdateResponse,
     WarehouseResponse,
 )
 from app.services.inventory_events import (
     inventory_event_stream,
     is_active_warehouse,
 )
+from app.services.inventory_stock import update_inventory_stock
 
 
 router = APIRouter(
@@ -97,6 +102,50 @@ def list_warehouse_products(
         for product, inventory in rows
     ]
 
+
+@router.patch(
+    "/{warehouse_id}/products/{product_id}/stock",
+    response_model=StockUpdateResponse,
+    responses={
+        401: {"description": "Authentication credentials are missing or invalid"},
+        403: {"description": "Staff or admin role required"},
+        404: {"description": "Warehouse, product, or inventory not found"},
+        409: {"description": "Stock update conflicts with current inventory state"},
+        422: {"description": "Invalid request data or missing idempotency key"},
+    },
+)
+def update_warehouse_product_stock(
+    warehouse_id: UUID,
+    product_id: UUID,
+    payload: StockUpdateRequest,
+    idempotency_key: Annotated[
+        str,
+        Header(
+            alias="Idempotency-Key",
+            min_length=1,
+            max_length=255,
+            pattern=r".*\S.*",
+        ),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_staff_or_admin)],
+):
+    """Update stock for a product in a warehouse."""
+    result = update_inventory_stock(
+        db=db,
+        user_id=current_user.user_id,
+        warehouse_id=warehouse_id,
+        product_id=product_id,
+        quantity_delta=payload.quantity_delta,
+        idempotency_key=idempotency_key,
+    )
+
+    return JSONResponse(
+        status_code=result.status_code,
+        content=result.body,
+    )
+
+
 @router.get(
     "/{warehouse_id}/inventory/events",
     responses={
@@ -130,6 +179,7 @@ def stream_warehouse_inventory(
                 "poll_interval_seconds"
             ),
         )
+
     if not is_active_warehouse(warehouse_id):
         raise HTTPException(
             status_code=404,

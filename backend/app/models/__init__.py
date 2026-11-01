@@ -7,6 +7,7 @@ from app.models.schema import (
     Order,
     OrderItem,
     PurchaseHistory,
+    IdempotencyRecord,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "Order",
     "OrderItem",
     "PurchaseHistory",
+    "IdempotencyRecord",
 ]

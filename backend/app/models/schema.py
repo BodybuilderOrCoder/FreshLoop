@@ -1,12 +1,22 @@
+
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
+
 from sqlalchemy import (
-    String, Text, Boolean, Numeric, Integer, ForeignKey,
-    DateTime, UniqueConstraint, CheckConstraint, Index
+    String,
+    Text,
+    Boolean,
+    Numeric,
+    Integer,
+    ForeignKey,
+    DateTime,
+    UniqueConstraint,
+    CheckConstraint,
+    Index,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -26,7 +36,10 @@ class User(Base):
     phone: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     address: Mapped[Optional[str]] = mapped_column(Text)
     role: Mapped[str] = mapped_column(String(20), default="CUSTOMER", nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
 
     orders: Mapped[List["Order"]] = relationship(back_populates="user")
     history_records: Mapped[List["PurchaseHistory"]] = relationship(back_populates="user")
@@ -48,7 +61,10 @@ class Product(Base):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     unit: Mapped[str] = mapped_column(String(30), nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
 
     inventory_levels: Mapped[List["InventoryLevel"]] = relationship(back_populates="product")
     order_items: Mapped[List["OrderItem"]] = relationship(back_populates="product")
@@ -86,7 +102,9 @@ class InventoryLevel(Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     reserved_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     product: Mapped["Product"] = relationship(back_populates="inventory_levels")
@@ -117,7 +135,10 @@ class Order(Base):
     status: Mapped[str] = mapped_column(String(30), default="PENDING", nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     delivery_address: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
 
     user: Mapped["User"] = relationship(back_populates="orders")
     items: Mapped[List["OrderItem"]] = relationship(
@@ -183,4 +204,47 @@ class PurchaseHistory(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "product_id", name="uq_user_product_history"),
         Index("idx_feature_affinity", "user_id", implicit_rating.desc()),
+    )
+
+
+class IdempotencyRecord(Base):
+    __tablename__ = "idempotency_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    idempotency_key: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+    request_fingerprint: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+    response_status: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+    response_body: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "idempotency_key",
+            name="uq_idempotency_user_key",
+        ),
     )
