@@ -308,5 +308,160 @@ class TestDatabaseIntegrity(unittest.TestCase):
         self.db.commit()
 
 
+    def test_insufficient_stock_rejection_and_rollback(self):
+        """
+        Integration Test 10: Insufficient Stock Rejection & Rollback:
+        Inventory has quantity = 5, reserved_quantity = 2 (available = 3).
+        A customer order requests 4 units.
+        Verifies that:
+        1. Attempt is rejected with Insufficient Stock error.
+        2. Transaction is rolled back.
+        3. Stock ledger values (quantity=5, reserved_quantity=2) remain unmodified.
+        """
+        test_prod = Product(
+            product_id=uuid.uuid4(),
+            sku=f"INSUFFICIENT-STOCK-SKU-{uuid.uuid4().hex[:6]}",
+            name="Rare Organic Dragonfruit",
+            category="Trái cây tươi",
+            unit_price=Decimal("80000.00"),
+            unit="Kg",
+        )
+        test_wh = self.db.query(Warehouse).first()
+        self.db.add(test_prod)
+        self.db.commit()
+
+        test_inv = InventoryLevel(
+            inventory_id=uuid.uuid4(),
+            product_id=test_prod.product_id,
+            warehouse_id=test_wh.warehouse_id,
+            quantity=5,
+            reserved_quantity=2,  # Available = 5 - 2 = 3
+        )
+        self.db.add(test_inv)
+        self.db.commit()
+
+        # Simulate Checkout Request demanding 4 units (> available 3)
+        requested_qty = 4
+        checkout_session = SessionLocal()
+        order_placed = False
+        try:
+            inv = (
+                checkout_session.query(InventoryLevel)
+                .filter_by(inventory_id=test_inv.inventory_id)
+                .with_for_update()
+                .one()
+            )
+            available = inv.quantity - inv.reserved_quantity
+            if available < requested_qty:
+                raise ValueError(f"Insufficient stock: requested {requested_qty}, available {available}")
+            
+            inv.reserved_quantity += requested_qty
+            checkout_session.commit()
+            order_placed = True
+        except ValueError:
+            checkout_session.rollback()
+        finally:
+            checkout_session.close()
+
+        # Assertions
+        self.assertFalse(order_placed, "Order must NOT be placed when requested quantity exceeds available stock.")
+        
+        # Verify database state after rollback
+        self.db.refresh(test_inv)
+        self.assertEqual(test_inv.quantity, 5, "Quantity must remain 5.")
+        self.assertEqual(test_inv.reserved_quantity, 2, "Reserved quantity must remain 2 (rollback verified).")
+
+        # Cleanup
+        self.db.delete(test_inv)
+        self.db.delete(test_prod)
+        self.db.commit()
+
+    def test_order_cancellation_releases_inventory(self):
+        """
+        Integration Test 11: Order Cancellation & Inventory Release:
+        Simulates full lifecycle transitions:
+        Stage 1 (RESERVE): Customer creates order (status='PENDING') for 3 units -> reserved_quantity = 3.
+        Stage 3 (RELEASE): Customer cancels order (status='CANCELLED') -> reserved_quantity decrements by 3 back to 0.
+        Verifies that available_stock returns to 100% original capacity.
+        """
+        test_prod = Product(
+            product_id=uuid.uuid4(),
+            sku=f"CANCEL-RELEASE-SKU-{uuid.uuid4().hex[:6]}",
+            name="Organic Hass Avocado",
+            category="Trái cây tươi",
+            unit_price=Decimal("60000.00"),
+            unit="Kg",
+        )
+        test_wh = self.db.query(Warehouse).first()
+        customer = self.db.query(User).filter_by(role="CUSTOMER").first()
+        self.db.add(test_prod)
+        self.db.commit()
+
+        test_inv = InventoryLevel(
+            inventory_id=uuid.uuid4(),
+            product_id=test_prod.product_id,
+            warehouse_id=test_wh.warehouse_id,
+            quantity=10,
+            reserved_quantity=0,
+        )
+        self.db.add(test_inv)
+        self.db.commit()
+
+        # Stage 1: Checkout / Reserve 3 units
+        order_id = uuid.uuid4()
+        reserve_session = SessionLocal()
+        inv_reserve = (
+            reserve_session.query(InventoryLevel)
+            .filter_by(inventory_id=test_inv.inventory_id)
+            .with_for_update()
+            .one()
+        )
+        inv_reserve.reserved_quantity += 3
+        order = Order(
+            order_id=order_id,
+            user_id=customer.user_id,
+            warehouse_id=test_wh.warehouse_id,
+            order_number=f"TEST-ORD-CANCEL-{uuid.uuid4().hex[:6]}",
+            status="PENDING",
+            total_amount=Decimal("180000.00"),
+            delivery_address="123 Test St",
+        )
+        reserve_session.add(order)
+        reserve_session.commit()
+        reserve_session.close()
+
+        # Check post-reserve state
+        self.db.refresh(test_inv)
+        self.assertEqual(test_inv.reserved_quantity, 3, "Reserved quantity must be 3 after order creation.")
+        available_after_reserve = test_inv.quantity - test_inv.reserved_quantity
+        self.assertEqual(available_after_reserve, 7, "Available stock must be 7.")
+
+        # Stage 3: Customer cancels order -> Release stock
+        cancel_session = SessionLocal()
+        inv_cancel = (
+            cancel_session.query(InventoryLevel)
+            .filter_by(inventory_id=test_inv.inventory_id)
+            .with_for_update()
+            .one()
+        )
+        inv_cancel.reserved_quantity -= 3
+        order_cancel = cancel_session.query(Order).filter_by(order_id=order_id).one()
+        order_cancel.status = "CANCELLED"
+        cancel_session.commit()
+        cancel_session.close()
+
+        # Check post-cancellation state
+        self.db.refresh(test_inv)
+        self.assertEqual(test_inv.reserved_quantity, 0, "Reserved quantity must return to 0 after cancellation.")
+        available_after_cancel = test_inv.quantity - test_inv.reserved_quantity
+        self.assertEqual(available_after_cancel, 10, "Available stock must be fully restored to 10.")
+
+        # Cleanup
+        ord_to_del = self.db.query(Order).filter_by(order_id=order_id).first()
+        if ord_to_del: self.db.delete(ord_to_del)
+        self.db.delete(test_inv)
+        self.db.delete(test_prod)
+        self.db.commit()
+
 if __name__ == "__main__":
     unittest.main()

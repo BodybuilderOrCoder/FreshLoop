@@ -120,6 +120,34 @@ def chronological_train_test_split(df: pd.DataFrame):
     
     print(f"[Train/Test Split] Train orders: {train_df['order_id'].nunique()} | Test orders: {len(test_order_ids)}")
     print(f"                   Train items: {len(train_df)} | Test items: {len(test_df)}")
+
+    # -------------------------------------------------------------
+    # Programmatic Leakage & Invariant Assertions
+    # -------------------------------------------------------------
+    # Invariant 1: Conservation of line items (zero row loss)
+    assert len(train_df) + len(test_df) == len(df), (
+        f"Row conservation failed: {len(train_df)} + {len(test_df)} != {len(df)}"
+    )
+
+    # Invariant 2: Disjoint order IDs (zero order leakage)
+    train_orders = set(train_df['order_id'])
+    test_orders = set(test_df['order_id'])
+    assert train_orders.isdisjoint(test_orders), (
+        f"Order leakage detected: {len(train_orders.intersection(test_orders))} overlapping order IDs!"
+    )
+
+    # Invariant 3: Strictly chronological split per user (zero temporal leakage)
+    for u_id in test_df['user_id'].unique():
+        u_train = train_df[train_df['user_id'] == u_id]
+        u_test = test_df[test_df['user_id'] == u_id]
+        if not u_train.empty and not u_test.empty:
+            max_train_time = u_train['created_at'].max()
+            min_test_time = u_test['created_at'].min()
+            assert max_train_time < min_test_time, (
+                f"Temporal leakage detected for user {u_id}: max train time ({max_train_time}) >= min test time ({min_test_time})"
+            )
+
+    print("[Leakage Verification] Programmatic assertions passed: zero order overlap and strictly chronological.")
     return train_df, test_df
 
 
