@@ -60,3 +60,17 @@ To invalidate after a new order, call `recommender.cache.invalidate(user_id)`.
 - The baseline has not been evaluated with Precision@10 yet (planned for later weeks).
 - Current seed data contains few repeated purchases, which limits the usefulness of recommendations.
 - ALS and advanced collaborative filtering are out of scope for Week 1.
+
+from recommender.service import get_recommendations_with_meta
+from recommender import cache as rec_cache
+
+# 1. Endpoint lấy Top-10 gợi ý (có cache Redis)
+items, cache_status, latency_ms = get_recommendations_with_meta(
+    user_id=str(user_id),
+    inter=interactions_df,
+    top_k=10,
+    exclude_product_ids=out_of_stock_ids, # Lọc sản phẩm hết hàng
+)
+
+# 2. Xóa cache sau khi user đặt đơn hàng mới:
+rec_cache.invalidate(user_id=str(user_id))

@@ -1,4 +1,4 @@
-"""Recommendation service with baseline/ALS selection and Redis caching."""
+"""Recommendation service with baseline/ALS selection, out-of-stock filtering, and Redis caching."""
 import logging
 import time
 from functools import lru_cache
@@ -59,13 +59,39 @@ def _recommend(
     )
 
 
+def filter_available_items(
+    items: list[dict],
+    exclude_product_ids: set | list | None = None,
+    top_k: int = config.TOP_K,
+) -> list[dict]:
+    """Lọc các sản phẩm hết hàng hoặc nằm trong danh sách loại trừ."""
+    if not exclude_product_ids:
+        return items[:top_k]
+
+    excluded_set = {str(pid) for pid in exclude_product_ids}
+    filtered = [
+        item for item in items
+        if str(item.get("product_id")) not in excluded_set
+    ]
+
+    # Cập nhật lại thứ hạng (rank) sau khi lọc
+    for idx, item in enumerate(filtered, start=1):
+        item["rank"] = idx
+
+    return filtered[:top_k]
+
+
 def get_recommendations_with_meta(
     user_id,
     inter,
     top_k: int = config.TOP_K,
     algorithm: str = config.REC_MODEL,
+    exclude_product_ids: set | list | None = None,
 ):
-    """Return (items, 'HIT' | 'MISS', elapsed milliseconds)."""
+    """Return (items, 'HIT' | 'MISS' | 'BYPASS', elapsed milliseconds).
+
+    Hỗ trợ Graceful Degradation nếu Redis không hoạt động.
+    """
     normalized_algorithm = str(algorithm).strip().lower()
 
     if normalized_algorithm not in SUPPORTED_ALGORITHMS:
@@ -83,29 +109,49 @@ def get_recommendations_with_meta(
 
     started_at = time.perf_counter()
 
-    cached = cache.get_items(
-        user_id,
-        algorithm=normalized_algorithm,
-        top_k=top_k,
-    )
-
-    if cached is not None:
-        status, items = "HIT", cached
-    else:
-        items = _recommend(
+    # Thử đọc từ Cache (Graceful Degradation nếu Redis down)
+    cached = None
+    redis_available = True
+    try:
+        cached = cache.get_items(
             user_id,
-            inter,
-            top_k,
-            normalized_algorithm,
-        )
-
-        cache.set_items(
-            user_id,
-            items,
             algorithm=normalized_algorithm,
             top_k=top_k,
         )
-        status = "MISS"
+    except Exception as exc:
+        redis_available = False
+        log.warning("Redis cache get failed, bypassing cache: %s", exc)
+
+    if cached is not None:
+        status = "HIT"
+        items = cached
+    else:
+        # Khi tính toán tươi, lấy dư số lượng (top_k * 2) để phòng trường hợp lọc hết hàng
+        fetch_k = top_k * 2 if exclude_product_ids else top_k
+        items = _recommend(
+            user_id,
+            inter,
+            fetch_k,
+            normalized_algorithm,
+        )
+
+        if redis_available:
+            try:
+                cache.set_items(
+                    user_id,
+                    items[:top_k],
+                    algorithm=normalized_algorithm,
+                    top_k=top_k,
+                )
+                status = "MISS"
+            except Exception as exc:
+                log.warning("Redis cache set failed: %s", exc)
+                status = "BYPASS"
+        else:
+            status = "BYPASS"
+
+    # Lọc bỏ các sản phẩm hết hàng nếu có danh sách loại trừ
+    items = filter_available_items(items, exclude_product_ids, top_k)
 
     elapsed_ms = (time.perf_counter() - started_at) * 1000
 
@@ -125,6 +171,7 @@ def get_recommendations(
     inter,
     top_k: int = config.TOP_K,
     algorithm: str = config.REC_MODEL,
+    exclude_product_ids: set | list | None = None,
 ):
     """Return recommendations without cache metadata."""
     return get_recommendations_with_meta(
@@ -132,4 +179,5 @@ def get_recommendations(
         inter,
         top_k=top_k,
         algorithm=algorithm,
+        exclude_product_ids=exclude_product_ids,
     )[0]
