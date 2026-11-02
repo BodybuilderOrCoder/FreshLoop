@@ -45,7 +45,7 @@ def extract_raw_orders():
             oi.total_price
         FROM orders o
         JOIN order_items oi ON o.order_id = oi.order_id
-        WHERE o.status IN ('DELIVERED', 'CONFIRMED')
+        WHERE o.status = 'DELIVERED'
         ORDER BY o.created_at ASC;
     """
     df = pd.read_sql(sql, con=engine)

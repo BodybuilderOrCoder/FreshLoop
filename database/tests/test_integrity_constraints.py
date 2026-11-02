@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(BASE_DIR, "backend"))
 from sqlalchemy.exc import IntegrityError
 from app.database import SessionLocal
 from app.models.schema import (
-    User, Product, Warehouse, InventoryLevel, Order, OrderItem
+    User, Product, Warehouse, InventoryLevel, Order, OrderItem, StaffWarehouseAssignment
 )
 
 
@@ -461,6 +461,95 @@ class TestDatabaseIntegrity(unittest.TestCase):
         if ord_to_del: self.db.delete(ord_to_del)
         self.db.delete(test_inv)
         self.db.delete(test_prod)
+        self.db.commit()
+
+
+    def test_staff_warehouse_assignment_unique_constraint(self):
+        """Test that assigning the same staff to the same warehouse twice violates uq_staff_warehouse."""
+        test_staff = User(
+            user_id=uuid.uuid4(),
+            email=f"test_staff_{uuid.uuid4().hex[:6]}@freshloop.vn",
+            password_hash="hash",
+            name="Test Staff",
+            phone=f"099{uuid.uuid4().int % 10000000:07d}",
+            role="STAFF"
+        )
+        test_wh = Warehouse(
+            warehouse_id=uuid.uuid4(),
+            code=f"WH_{uuid.uuid4().hex[:4]}",
+            name="Test Warehouse",
+            location="Test Address",
+            service_zone="ZONE_TEST"
+        )
+        self.db.add_all([test_staff, test_wh])
+        self.db.commit()
+
+        # First assignment succeeds
+        assign1 = StaffWarehouseAssignment(
+            assignment_id=uuid.uuid4(),
+            user_id=test_staff.user_id,
+            warehouse_id=test_wh.warehouse_id,
+            is_active=True
+        )
+        self.db.add(assign1)
+        self.db.commit()
+
+        # Duplicate assignment must fail
+        assign2 = StaffWarehouseAssignment(
+            assignment_id=uuid.uuid4(),
+            user_id=test_staff.user_id,
+            warehouse_id=test_wh.warehouse_id,
+            is_active=True
+        )
+        self.db.add(assign2)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+        self.db.rollback()
+
+        # Clean up
+        self.db.delete(assign1)
+        self.db.delete(test_staff)
+        self.db.delete(test_wh)
+        self.db.commit()
+
+    def test_staff_warehouse_assignment_cascade_delete(self):
+        """Test that deleting a staff user cascades and removes their warehouse assignment."""
+        test_staff = User(
+            user_id=uuid.uuid4(),
+            email=f"cascade_staff_{uuid.uuid4().hex[:6]}@freshloop.vn",
+            password_hash="hash",
+            name="Cascade Staff",
+            phone=f"098{uuid.uuid4().int % 10000000:07d}",
+            role="STAFF"
+        )
+        test_wh = Warehouse(
+            warehouse_id=uuid.uuid4(),
+            code=f"WH_{uuid.uuid4().hex[:4]}",
+            name="Cascade Warehouse",
+            location="Test Address",
+            service_zone="ZONE_TEST"
+        )
+        self.db.add_all([test_staff, test_wh])
+        self.db.commit()
+
+        assign = StaffWarehouseAssignment(
+            assignment_id=uuid.uuid4(),
+            user_id=test_staff.user_id,
+            warehouse_id=test_wh.warehouse_id,
+            is_active=True
+        )
+        self.db.add(assign)
+        self.db.commit()
+
+        # Delete staff user
+        self.db.delete(test_staff)
+        self.db.commit()
+
+        # Assignment should be deleted automatically via cascade
+        remaining_assign = self.db.query(StaffWarehouseAssignment).filter_by(assignment_id=assign.assignment_id).first()
+        self.assertIsNone(remaining_assign, "Assignment must be deleted when the staff user is deleted via CASCADE.")
+
+        self.db.delete(test_wh)
         self.db.commit()
 
 if __name__ == "__main__":

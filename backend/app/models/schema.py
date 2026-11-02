@@ -1,4 +1,3 @@
-
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -43,6 +42,9 @@ class User(Base):
 
     orders: Mapped[List["Order"]] = relationship(back_populates="user")
     history_records: Mapped[List["PurchaseHistory"]] = relationship(back_populates="user")
+    warehouse_assignments: Mapped[List["StaffWarehouseAssignment"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("role IN ('CUSTOMER', 'STAFF', 'ADMIN')", name="chk_user_role"),
@@ -85,6 +87,10 @@ class Warehouse(Base):
     location: Mapped[str] = mapped_column(Text, nullable=False)
     service_zone: Mapped[str] = mapped_column(String(50), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    staff_assignments: Mapped[List["StaffWarehouseAssignment"]] = relationship(
+        back_populates="warehouse", cascade="all, delete-orphan"
+    )
 
 
 class InventoryLevel(Base):
@@ -248,3 +254,32 @@ class IdempotencyRecord(Base):
             name="uq_idempotency_user_key",
         ),
     )
+
+class StaffWarehouseAssignment(Base):
+    __tablename__ = "staff_warehouse_assignments"
+
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("warehouses.warehouse_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="warehouse_assignments")
+    warehouse: Mapped["Warehouse"] = relationship(back_populates="staff_assignments")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "warehouse_id", name="uq_staff_warehouse"),
+    )
+

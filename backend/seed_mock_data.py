@@ -19,6 +19,7 @@ from app.models.schema import (
     Order,
     OrderItem,
     PurchaseHistory,
+    StaffWarehouseAssignment,
 )
 
 # Seed parameters conforming to Week 1 Task 3.3 Target Deliverables:
@@ -186,6 +187,7 @@ def expand_catalog_to_target(templates, target_count=200):
 def clean_database(db):
     """Cleans all existing records in reverse dependency order for clean idempotent re-runs."""
     print(">>> Cleaning existing database records (idempotent run)...")
+    db.query(StaffWarehouseAssignment).delete()
     db.query(PurchaseHistory).delete()
     db.query(OrderItem).delete()
     db.query(Order).delete()
@@ -359,6 +361,31 @@ def seed_database(clean=False):
         print(f"    Created {len(users)} users.")
 
         # -------------------------------------------------------------
+        # 4b. STAFF WAREHOUSE ASSIGNMENTS (N-N RBAC)
+        # -------------------------------------------------------------
+        print("\n>>> 4b. Assigning Warehouses to Staff (N-N RBAC)...")
+        staff_user = next(u for u in users if u.role == "STAFF")
+        staff_assignments = [
+            StaffWarehouseAssignment(
+                assignment_id=gen_uuid("staff_assignment", f"{staff_user.email}:HUB-01"),
+                user_id=staff_user.user_id,
+                warehouse_id=warehouses[0].warehouse_id,  # HUB-01 Central Hub Q1
+                assigned_at=BASE_REFERENCE_TIME,
+                is_active=True,
+            ),
+            StaffWarehouseAssignment(
+                assignment_id=gen_uuid("staff_assignment", f"{staff_user.email}:MART-02"),
+                user_id=staff_user.user_id,
+                warehouse_id=warehouses[1].warehouse_id,  # MART-02 Mini Mart Q7
+                assigned_at=BASE_REFERENCE_TIME,
+                is_active=True,
+            ),
+        ]
+        db.add_all(staff_assignments)
+        db.flush()
+        print(f"    Created {len(staff_assignments)} staff-warehouse assignments.")
+
+        # -------------------------------------------------------------
         # 5. USER PERSONA & FAVORITE BASKET (8-15 products per customer)
         # -------------------------------------------------------------
         print("\n>>> 5. Assigning Habitual 'Favorite Baskets' (8-15 products) to each customer...")
@@ -492,8 +519,8 @@ def seed_database(clean=False):
         # -------------------------------------------------------------
         # 7. AGGREGATE PURCHASE HISTORY (FEATURE STORE FOR ÂN)
         # -------------------------------------------------------------
-        print("\n>>> 7. Aggregating PurchaseHistory Feature Store from FINISHED orders...")
-        print("    Rule: ONLY counting finished orders (DELIVERED and CONFIRMED).")
+        print("\n>>> 7. Aggregating PurchaseHistory Feature Store from DELIVERED orders...")
+        print("    Rule: ONLY counting finished orders (DELIVERED, per strict COD business rule).")
         print("    Rule: total_purchases = number of distinct orders containing the item (Order Count).")
 
         # Map order_id -> order object for fast lookup
@@ -504,8 +531,8 @@ def seed_database(clean=False):
 
         for item in order_items:
             ord_obj = order_dict[item.order_id]
-            # Exclude PENDING and CANCELLED
-            if ord_obj.status not in ("DELIVERED", "CONFIRMED"):
+            # ONLY count DELIVERED orders (exclude PENDING, CONFIRMED, and CANCELLED for COD compliance)
+            if ord_obj.status != "DELIVERED":
                 continue
 
             pair = (ord_obj.user_id, item.product_id)

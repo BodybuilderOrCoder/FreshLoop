@@ -20,19 +20,19 @@ In the grocery sector, purchasing behavior differs sharply from media or generic
 
 ```mermaid
 flowchart TD
-    A["PostgreSQL 16: orders & order_items<br/>(449 Finished Orders = 4,944 Raw Line Items)"] --> B["Data Cleaning & Deduplication<br/>(4,944 Validated Rows)"]
+    A["PostgreSQL 16: orders & order_items<br/>(449 Finished Orders = 4,895 Raw Line Items)"] --> B["Data Cleaning & Deduplication<br/>(4,895 Validated Rows)"]
     B --> C["Chronological Train/Test Split (Temporal Split)"]
-    C -->|401 Earlier Orders: 4,421 Items| D["User-Item Matrix Aggregation<br/>(Group by user_id, product_id)"]
-    C -->|48 Latest Orders: 523 Items| E["Test Target Extraction<br/>(Holdout Ground Truth)"]
-    D --> F["train_interactions.csv<br/>(1,387 Unique User-Product Pairs)"]
-    E --> G["test_ground_truth.csv<br/>(523 Target Evaluation Items)"]
+    C -->|401 Earlier Orders: 4,378 Items| D["User-Item Matrix Aggregation<br/>(Group by user_id, product_id)"]
+    C -->|48 Latest Orders: 517 Items| E["Test Target Extraction<br/>(Holdout Ground Truth)"]
+    D --> F["train_interactions.csv<br/>(1,379 Unique User-Product Pairs)"]
+    E --> G["test_ground_truth.csv<br/>(517 Target Evaluation Items)"]
 ```
 
 ---
 
 ## 3. Cleaning & Normalization Rules
 
-1. **Transaction Integrity:** Exclude orders with `status IN ('CANCELLED', 'PENDING')`. Only finalized purchases (`DELIVERED`, `CONFIRMED`) represent true consumer preference.
+1. **Transaction Integrity:** Exclude orders with `status IN ('CANCELLED', 'PENDING')`. Only finalized purchases (`DELIVERED`) represent true consumer preference.
 2. **Missing Key Removal:** Drop records where `order_id`, `user_id`, `product_id`, `quantity`, or `created_at` is null.
 3. **Quantity Validation:** Filter out non-positive quantities (`quantity > 0`).
 4. **Order-Item Deduplication:** In cases where an SKU was added multiple times within a single order, consolidate by summing quantities (`quantity.sum()`).
@@ -69,16 +69,16 @@ A common point of confusion in data pipelines is comparing raw order line items 
 
 | Pipeline Stage | Dataset / Scope | Row Count | Unit of Analysis / Entity | Explanation |
 | :--- | :--- | :---: | :--- | :--- |
-| **Raw Extraction** | Finished Orders (`DELIVERED`, `CONFIRMED`) | **4,944** | Order Line Items | All items purchased across 449 completed orders. |
-| **Temporal Split** | **Train Set** (Earlier orders 1..N-1) | **4,421** | Order Line Items | 401 historical orders used for model training. |
-| **Temporal Split** | **Test Set** (Latest order N per customer) | **523** | Order Line Items | 48 holdout orders used as Ground Truth targets. |
-| **Sum of Split** | Train Items + Test Items | **4,944** | Order Line Items | $4,421 + 523 = 4,944$. **Exactly 100% of data is preserved.** |
-| **Feature Aggregation** | `train_interactions.csv` | **1,387** | **Unique `(user_id, product_id)` Pairs** | Collaborative Filtering (ALS) requires unique customer-item matrix coordinates. Multiple purchases of the same SKU by a customer across their weekly orders collapse into 1 pair with repeat counter `purchase_count`. |
-| **Ground Truth Export** | `test_ground_truth.csv` | **523** | Test Target Items | The un-aggregated items from each customer's final order to test if the top-10 recommended SKUs match what they actually bought next. |
+| **Raw Extraction** | Finished Orders (`DELIVERED`) | **4,895** | Order Line Items | All items purchased across 449 completed orders. |
+| **Temporal Split** | **Train Set** (Earlier orders 1..N-1) | **4,378** | Order Line Items | 401 historical orders used for model training. |
+| **Temporal Split** | **Test Set** (Latest order N per customer) | **517** | Order Line Items | 48 holdout orders used as Ground Truth targets. |
+| **Sum of Split** | Train Items + Test Items | **4,895** | Order Line Items | $4,378 + 517 = 4,895$. **Exactly 100% of data is preserved.** |
+| **Feature Aggregation** | `train_interactions.csv` | **1,379** | **Unique `(user_id, product_id)` Pairs** | Collaborative Filtering (ALS) requires unique customer-item matrix coordinates. Multiple purchases of the same SKU by a customer across their weekly orders collapse into 1 pair with repeat counter `purchase_count`. |
+| **Ground Truth Export** | `test_ground_truth.csv` | **517** | Test Target Items | The un-aggregated items from each customer's final order to test if the top-10 recommended SKUs match what they actually bought next. |
 
-### Why do 4,421 Train Items collapse into 1,387 Pairs?
+### Why do 4,378 Train Items collapse into 1,379 Pairs?
 In grocery shopping, users purchase the same staple products repeatedly across consecutive weeks:
-$$\text{Average Orders Per User} \approx 9.35 \quad \implies \quad \text{Average Repeat Ratio} = \frac{4,421 \text{ train lines}}{1,387 \text{ unique pairs}} \approx 3.19 \text{ purchases per pair}$$
+$$\text{Average Orders Per User} \approx 9.35 \quad \implies \quad \text{Average Repeat Ratio} = \frac{4,378 \text{ train lines}}{1,379 \text{ unique pairs}} \approx 3.19 \text{ purchases per pair}$$
 - A customer who ordered *Tomato 500g* in 7 different weekly training orders has **7 distinct line items** in the raw database.
 - In `train_interactions.csv`, these 7 rows are grouped into **1 interaction row**:
   - `purchase_count = 7`
