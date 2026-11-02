@@ -1,0 +1,145 @@
+﻿BEGIN;
+
+CREATE TABLE alembic_version (
+    version_num VARCHAR(32) NOT NULL, 
+    CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
+);
+
+-- Running upgrade  -> 3305bfd1be66
+
+CREATE TABLE users (
+    user_id UUID NOT NULL, 
+    email VARCHAR(255) NOT NULL, 
+    password_hash VARCHAR(255) NOT NULL, 
+    name VARCHAR(120) NOT NULL, 
+    phone VARCHAR(20) NOT NULL, 
+    address TEXT, 
+    role VARCHAR(20) DEFAULT 'CUSTOMER' NOT NULL, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    PRIMARY KEY (user_id), 
+    CONSTRAINT chk_user_role CHECK (role IN ('CUSTOMER', 'STAFF', 'ADMIN')), 
+    CONSTRAINT uq_users_email UNIQUE (email), 
+    CONSTRAINT uq_users_phone UNIQUE (phone)
+);
+
+CREATE UNIQUE INDEX ix_users_email ON users (email);
+
+CREATE TABLE products (
+    product_id UUID NOT NULL, 
+    sku VARCHAR(50) NOT NULL, 
+    name VARCHAR(255) NOT NULL, 
+    category VARCHAR(100) NOT NULL, 
+    unit_price NUMERIC(12, 2) NOT NULL, 
+    unit VARCHAR(30) NOT NULL, 
+    is_available BOOLEAN DEFAULT 'true' NOT NULL, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    PRIMARY KEY (product_id), 
+    CONSTRAINT chk_product_price_non_negative CHECK (unit_price >= 0), 
+    CONSTRAINT uq_products_sku UNIQUE (sku)
+);
+
+CREATE UNIQUE INDEX ix_products_sku ON products (sku);
+
+CREATE INDEX ix_products_category ON products (category);
+
+CREATE TABLE warehouses (
+    warehouse_id UUID NOT NULL, 
+    code VARCHAR(20) NOT NULL, 
+    name VARCHAR(150) NOT NULL, 
+    location TEXT NOT NULL, 
+    service_zone VARCHAR(50) NOT NULL, 
+    is_active BOOLEAN DEFAULT 'true' NOT NULL, 
+    PRIMARY KEY (warehouse_id), 
+    CONSTRAINT uq_warehouses_code UNIQUE (code)
+);
+
+CREATE TABLE inventory_levels (
+    inventory_id UUID NOT NULL, 
+    product_id UUID NOT NULL, 
+    warehouse_id UUID NOT NULL, 
+    quantity INTEGER NOT NULL, 
+    reserved_quantity INTEGER DEFAULT '0' NOT NULL, 
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    PRIMARY KEY (inventory_id), 
+    CONSTRAINT chk_inventory_qty_non_negative CHECK (quantity >= 0), 
+    CONSTRAINT chk_reserved_qty_non_negative CHECK (reserved_quantity >= 0), 
+    CONSTRAINT chk_reserved_le_quantity CHECK (reserved_quantity <= quantity), 
+    CONSTRAINT uq_product_warehouse UNIQUE (product_id, warehouse_id), 
+    FOREIGN KEY(product_id) REFERENCES products (product_id) ON DELETE RESTRICT, 
+    FOREIGN KEY(warehouse_id) REFERENCES warehouses (warehouse_id) ON DELETE RESTRICT
+);
+
+CREATE INDEX idx_inventory_lookup ON inventory_levels (warehouse_id, product_id);
+
+CREATE TABLE orders (
+    order_id UUID NOT NULL, 
+    user_id UUID NOT NULL, 
+    warehouse_id UUID NOT NULL, 
+    order_number VARCHAR(32) NOT NULL, 
+    status VARCHAR(30) DEFAULT 'PENDING' NOT NULL, 
+    total_amount NUMERIC(12, 2) NOT NULL, 
+    delivery_address TEXT NOT NULL, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    PRIMARY KEY (order_id), 
+    CONSTRAINT chk_order_status CHECK (status IN ('PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED')), 
+    CONSTRAINT chk_order_total_positive CHECK (total_amount >= 0), 
+    CONSTRAINT uq_orders_order_number UNIQUE (order_number), 
+    FOREIGN KEY(user_id) REFERENCES users (user_id) ON DELETE RESTRICT, 
+    FOREIGN KEY(warehouse_id) REFERENCES warehouses (warehouse_id) ON DELETE RESTRICT
+);
+
+CREATE UNIQUE INDEX ix_orders_order_number ON orders (order_number);
+
+CREATE INDEX idx_orders_user_timeline ON orders (user_id, created_at DESC);
+
+CREATE TABLE order_items (
+    order_item_id UUID NOT NULL, 
+    order_id UUID NOT NULL, 
+    product_id UUID NOT NULL, 
+    quantity INTEGER NOT NULL, 
+    unit_price NUMERIC(12, 2) NOT NULL, 
+    total_price NUMERIC(12, 2) NOT NULL, 
+    PRIMARY KEY (order_item_id), 
+    CONSTRAINT chk_order_item_qty_positive CHECK (quantity > 0), 
+    CONSTRAINT chk_order_item_price_positive CHECK (unit_price >= 0), 
+    FOREIGN KEY(order_id) REFERENCES orders (order_id) ON DELETE CASCADE, 
+    FOREIGN KEY(product_id) REFERENCES products (product_id) ON DELETE RESTRICT
+);
+
+CREATE TABLE purchase_history (
+    history_id UUID NOT NULL, 
+    user_id UUID NOT NULL, 
+    product_id UUID NOT NULL, 
+    total_purchases INTEGER DEFAULT '1' NOT NULL, 
+    last_purchased_at TIMESTAMP WITH TIME ZONE NOT NULL, 
+    recency_score NUMERIC(6, 4) DEFAULT '1.0000' NOT NULL, 
+    implicit_rating NUMERIC(8, 4) NOT NULL, 
+    PRIMARY KEY (history_id), 
+    CONSTRAINT uq_user_product_history UNIQUE (user_id, product_id), 
+    FOREIGN KEY(user_id) REFERENCES users (user_id) ON DELETE CASCADE, 
+    FOREIGN KEY(product_id) REFERENCES products (product_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_feature_affinity ON purchase_history (user_id, implicit_rating DESC);
+
+INSERT INTO alembic_version (version_num) VALUES ('3305bfd1be66') RETURNING alembic_version.version_num;
+
+-- Running upgrade 3305bfd1be66 -> 948e2297107f
+
+CREATE TABLE idempotency_records (
+    id UUID NOT NULL, 
+    user_id UUID NOT NULL, 
+    idempotency_key VARCHAR(255) NOT NULL, 
+    request_fingerprint VARCHAR(64) NOT NULL, 
+    response_status INTEGER NOT NULL, 
+    response_body JSONB NOT NULL, 
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL, 
+    PRIMARY KEY (id), 
+    FOREIGN KEY(user_id) REFERENCES users (user_id) ON DELETE RESTRICT, 
+    CONSTRAINT uq_idempotency_user_key UNIQUE (user_id, idempotency_key)
+);
+
+UPDATE alembic_version SET version_num='948e2297107f' WHERE alembic_version.version_num = '3305bfd1be66';
+
+COMMIT;
+

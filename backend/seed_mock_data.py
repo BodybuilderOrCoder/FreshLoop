@@ -270,6 +270,7 @@ def seed_database(clean=False):
                 unit_price=price,
                 unit=unit,
                 is_available=True,
+                created_at=BASE_REFERENCE_TIME,
             )
             products.append(p)
             category_map.setdefault(cat, []).append(p)
@@ -299,6 +300,7 @@ def seed_database(clean=False):
                         warehouse_id=wh.warehouse_id,
                         quantity=qty,
                         reserved_quantity=reserved,
+                        updated_at=BASE_REFERENCE_TIME,
                     )
                 )
         db.add_all(inventory_records)
@@ -319,6 +321,7 @@ def seed_database(clean=False):
                 phone="0901000001",
                 address="FreshLoop HQ, 123 Le Duan, Quan 1, TP.HCM",
                 role="ADMIN",
+                created_at=BASE_REFERENCE_TIME,
             )
         )
         users.append(
@@ -330,6 +333,7 @@ def seed_database(clean=False):
                 phone="0901000002",
                 address="Kho HUB-01, Quan 1, TP.HCM",
                 role="STAFF",
+                created_at=BASE_REFERENCE_TIME,
             )
         )
 
@@ -347,6 +351,7 @@ def seed_database(clean=False):
                     phone=phone_num,
                     address=street,
                     role="CUSTOMER",
+                    created_at=BASE_REFERENCE_TIME,
                 )
             )
         db.add_all(users)
