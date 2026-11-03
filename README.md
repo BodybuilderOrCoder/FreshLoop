@@ -285,15 +285,16 @@ The proposal (4 Oct 2026) was the initial design. During implementation the team
 | ALS as the main model, blended with the baseline | Frequency × recency baseline is the default (`REC_MODEL=baseline`); ALS can be selected via `REC_MODEL` | Weeks 2–3: baseline first, ALS must not block progress |
 | 7 tables | 9 tables: added `idempotency_records` and `staff_warehouse_assignments` | Support idempotency and per-warehouse permissions |
 | CI/CD with GitHub Actions, Docker images | Not set up | Still planned |
+| Hiếu: Frontend Engineer | Hiếu: Full-Stack Developer from Week 3 | Lets the team lead control end-to-end integration |
 
 ## 12. Team
 
-| Member | Role (per proposal) |
-| --- | --- |
-| Nguyễn Vũ Hiếu | Project Lead / Integration Architect / Frontend Engineer |
-| Mai Danh Tiến | Backend Engineer |
-| Trần Hữu Thắng | Data Engineer / Database Engineer |
-| Ngô Hồng Ân | ML / Cache / Real-Time Engineer |
+| Member | Current role | Role in proposal |
+| --- | --- | --- |
+| Nguyễn Vũ Hiếu | Team Leader / Integration Architect / Full-Stack Developer (from Week 3) | Project Lead / Integration Architect / Frontend Engineer |
+| Mai Danh Tiến | Backend Engineer | Backend Engineer |
+| Trần Hữu Thắng | Data Engineer / Database Engineer | Data Engineer / Database Engineer |
+| Ngô Hồng Ân | ML / Cache / Real-Time Engineer | ML / Cache / Real-Time Engineer |
 
 ## 13. Related Documents
 
