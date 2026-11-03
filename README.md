@@ -289,12 +289,12 @@ The proposal (4 Oct 2026) was the initial design. During implementation the team
 
 ## 12. Team
 
-| Member | Current role | Role in proposal |
-| --- | --- | --- |
-| Nguyễn Vũ Hiếu | Team Leader / Integration Architect / Full-Stack Developer (from Week 3) | Project Lead / Integration Architect / Frontend Engineer |
-| Mai Danh Tiến | Backend Engineer | Backend Engineer |
-| Trần Hữu Thắng | Data Engineer / Database Engineer | Data Engineer / Database Engineer |
-| Ngô Hồng Ân | ML / Cache / Real-Time Engineer | ML / Cache / Real-Time Engineer |
+| Member | Role |
+| --- | --- |
+| Nguyễn Vũ Hiếu | Team Leader / Full-Stack Developer |
+| Mai Danh Tiến | Backend Engineer |
+| Trần Hữu Thắng | Data Engineer / Database Engineer |
+| Ngô Hồng Ân | ML / Cache / Real-Time Engineer |
 
 ## 13. Related Documents
 
