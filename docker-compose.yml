@@ -4,11 +4,11 @@ services:
     container_name: freshloop-postgres
     restart: always
     environment:
-      POSTGRES_USER: freshloop_user
-      POSTGRES_PASSWORD: freshloop_password123
-      POSTGRES_DB: freshloop_db
+      POSTGRES_USER: ${POSTGRES_USER:-freshloop_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-freshloop_password123}
+      POSTGRES_DB: ${POSTGRES_DB:-freshloop_db}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -17,7 +17,7 @@ services:
     container_name: freshloop-redis
     restart: always
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
 volumes:
   pgdata:

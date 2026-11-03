@@ -128,3 +128,40 @@ Pre-aggregated interaction store for the recommendation pipeline.
 *Table Constraints & Index:*
 - `UNIQUE (user_id, product_id)`: Unique interaction score per customer-product pair.
 - `idx_feature_affinity`: B-Tree index on `(user_id, implicit_rating DESC)` for fast top-N extraction.
+
+---
+
+## 8. Table: `idempotency_records`
+Provides transactional idempotency guarantees for mutative API calls (such as checkout and payment processing).
+
+| Column | Type | Nullable | Default | Constraints & Index | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `id` | `UUID` | No | `gen_random_uuid()` | **PRIMARY KEY** | Unique record identifier |
+| `user_id` | `UUID` | No | None | **FOREIGN KEY** (`users.user_id`, ON DELETE RESTRICT) | User initiating the request |
+| `idempotency_key` | `VARCHAR(255)` | No | None | None | Client-supplied unique token header |
+| `request_fingerprint` | `VARCHAR(64)` | No | None | None | SHA-256 hash of the incoming request body |
+| `response_status` | `INTEGER` | No | None | None | HTTP status code of the cached execution |
+| `response_body` | `JSONB` | No | None | None | Cached serialized response payload |
+| `created_at` | `TIMESTAMPTZ` | No | `NOW()` | None | Timestamp of first execution |
+
+*Table Constraints:*
+- `UNIQUE (user_id, idempotency_key)` (`uq_idempotency_user_key`): Prevents duplicate submissions of the exact same action by a given user.
+
+---
+
+## 9. Table: `staff_warehouse_assignments`
+Implements Many-to-Many (N-N) Role-Based Access Control (RBAC) linking staff personnel to their designated fulfillment locations.
+
+| Column | Type | Nullable | Default | Constraints & Index | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `assignment_id` | `UUID` | No | `gen_random_uuid()` | **PRIMARY KEY** | Unique assignment ID |
+| `user_id` | `UUID` | No | None | **FOREIGN KEY** (`users.user_id`, ON DELETE CASCADE), Index | Staff user identifier |
+| `warehouse_id` | `UUID` | No | None | **FOREIGN KEY** (`warehouses.warehouse_id`, ON DELETE CASCADE), Index | Assigned warehouse node |
+| `assigned_at` | `TIMESTAMPTZ` | No | `NOW()` | None | Timestamp when access was granted |
+| `is_active` | `BOOLEAN` | No | `TRUE` | None | Operational status of this access grant |
+
+*Table Constraints & Indexes:*
+- `UNIQUE (user_id, warehouse_id)` (`uq_staff_warehouse`): Prevents duplicate assignment of the same staff member to the same warehouse.
+- `ix_staff_warehouse_user_id`: B-Tree index on `user_id` for fast RBAC authorization lookups during staff API requests.
+- `ix_staff_warehouse_warehouse_id`: B-Tree index on `warehouse_id` for listing authorized personnel per facility.
+

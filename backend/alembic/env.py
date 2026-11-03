@@ -1,5 +1,9 @@
+import os
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
@@ -10,33 +14,28 @@ from alembic import context
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-import sys
-import os
+# Add backend directory to sys.path
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+root_dir = os.path.dirname(backend_dir)
+sys.path.insert(0, backend_dir)
 
-# Allow an explicit database override for isolated test migrations.
-# Keep the existing alembic.ini URL as the default.
-database_url_override = os.getenv("ALEMBIC_DATABASE_URL")
+# Load environment variables
+load_dotenv(os.path.join(root_dir, ".env"))
+load_dotenv(os.path.join(backend_dir, ".env"))
 
-if database_url_override:
+# Allow an explicit database override for isolated test migrations or from environment
+database_url = os.getenv("ALEMBIC_DATABASE_URL") or os.getenv("DATABASE_URL")
+if database_url:
     config.set_main_option(
         "sqlalchemy.url",
-        database_url_override.replace("%", "%%"),
+        database_url.replace("%", "%%"),
     )
-
-# Add backend directory to sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.models.schema import Base
 target_metadata = Base.metadata
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
 
 
 def run_migrations_offline() -> None:
