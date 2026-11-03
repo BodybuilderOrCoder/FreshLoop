@@ -490,11 +490,17 @@ def seed_database(clean=False):
                             order_item_id=gen_uuid("order_item", f"{order_num_str}:{item_idx}"),
                             order_id=order_id,
                             product_id=prod.product_id,
+                            product_name=prod.name,  # Product name snapshot at purchase time
                             quantity=qty,
                             unit_price=unit_p,
                             total_price=tot_p,
                         )
                     )
+
+                # COD Payment Status Lifecycle:
+                # DELIVERED orders have COD collected -> PAID
+                # PENDING, CONFIRMED, CANCELLED orders -> UNPAID
+                payment_status = "PAID" if status == "DELIVERED" else "UNPAID"
 
                 orders.append(
                     Order(
@@ -503,6 +509,8 @@ def seed_database(clean=False):
                         warehouse_id=wh.warehouse_id,
                         order_number=order_num_str,
                         status=status,
+                        payment_method="COD",
+                        payment_status=payment_status,
                         total_amount=total_order_amount,
                         delivery_address=u.address,
                         created_at=order_time,

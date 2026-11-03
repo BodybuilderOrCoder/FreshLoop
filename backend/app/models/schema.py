@@ -139,6 +139,12 @@ class Order(Base):
     )
     order_number: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(30), default="PENDING", nullable=False)
+    payment_method: Mapped[str] = mapped_column(
+        String(20), default="COD", server_default="COD", nullable=False
+    )
+    payment_status: Mapped[str] = mapped_column(
+        String(20), default="UNPAID", server_default="UNPAID", nullable=False
+    )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     delivery_address: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -155,6 +161,11 @@ class Order(Base):
         CheckConstraint(
             "status IN ('PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED')",
             name="chk_order_status",
+        ),
+        CheckConstraint("payment_method IN ('COD')", name="chk_order_payment_method"),
+        CheckConstraint(
+            "payment_status IN ('UNPAID', 'PAID')",
+            name="chk_order_payment_status",
         ),
         CheckConstraint("total_amount >= 0", name="chk_order_total_positive"),
         Index("idx_orders_user_timeline", "user_id", created_at.desc()),
@@ -173,6 +184,7 @@ class OrderItem(Base):
     product_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("products.product_id", ondelete="RESTRICT"), nullable=False
     )
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     total_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)

@@ -89,6 +89,8 @@ Header table for customer grocery orders.
 | `warehouse_id` | `UUID` | No | None | **FOREIGN KEY** (`warehouses.warehouse_id`, ON DELETE RESTRICT) | Fulfilling warehouse ID |
 | `order_number` | `VARCHAR(32)` | No | None | **UNIQUE**, B-Tree Index | Human-readable order code |
 | `status` | `VARCHAR(30)` | No | `'PENDING'` | `CHECK (status IN ('PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'))` | Order lifecycle status |
+| `payment_method` | `VARCHAR(20)` | No | `'COD'` | `CHECK (payment_method IN ('COD'))` | Payment method (MVP strictly COD) |
+| `payment_status` | `VARCHAR(20)` | No | `'UNPAID'` | `CHECK (payment_status IN ('UNPAID', 'PAID'))` | COD payment collection status (`UNPAID` on checkout/confirmed/cancelled, `PAID` upon delivery) |
 | `total_amount` | `NUMERIC(12,2)`| No | None | `CHECK (total_amount >= 0)` | Total payable amount in VND |
 | `delivery_address`| `TEXT` | No | None | None | Delivery destination address |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | B-Tree Timeline Index | Order submission timestamp |
@@ -106,6 +108,7 @@ Line items for each order. Implements **Price Snapshotting**.
 | `order_item_id` | `UUID` | No | `gen_random_uuid()` | **PRIMARY KEY** | Line item identifier |
 | `order_id` | `UUID` | No | None | **FOREIGN KEY** (`orders.order_id`, ON DELETE CASCADE) | Order reference |
 | `product_id` | `UUID` | No | None | **FOREIGN KEY** (`products.product_id`, ON DELETE RESTRICT) | Product reference |
+| `product_name` | `VARCHAR(255)` | No | None | None | **Name Snapshot:** immutable product name at checkout time |
 | `quantity` | `INTEGER` | No | None | `CHECK (quantity > 0)` | Units ordered |
 | `unit_price` | `NUMERIC(12,2)`| No | None | `CHECK (unit_price >= 0)` | **Price Snapshot:** frozen price at purchase time |
 | `total_price` | `NUMERIC(12,2)`| No | None | None | Subtotal (`quantity * unit_price`) |

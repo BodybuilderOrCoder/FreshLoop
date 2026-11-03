@@ -161,5 +161,35 @@ CREATE INDEX ix_staff_warehouse_warehouse_id ON staff_warehouse_assignments (war
 
 UPDATE alembic_version SET version_num='b22df6a0d648' WHERE alembic_version.version_num = '948e2297107f';
 
+-- Running upgrade b22df6a0d648 -> 646f565b7940
+
+ALTER TABLE orders ADD COLUMN payment_method VARCHAR(20) DEFAULT 'COD' NOT NULL;
+
+ALTER TABLE orders ADD COLUMN payment_status VARCHAR(20) DEFAULT 'UNPAID' NOT NULL;
+
+ALTER TABLE orders ADD CONSTRAINT chk_order_payment_method CHECK (payment_method IN ('COD'));
+
+ALTER TABLE orders ADD CONSTRAINT chk_order_payment_status CHECK (payment_status IN ('UNPAID', 'PAID'));
+
+ALTER TABLE order_items ADD COLUMN product_name VARCHAR(255);
+
+UPDATE order_items oi
+            SET product_name = p.name
+            FROM products p
+            WHERE oi.product_id = p.product_id
+              AND oi.product_name IS NULL;
+
+UPDATE orders
+            SET payment_status = 'PAID'
+            WHERE status = 'DELIVERED';
+
+UPDATE order_items
+            SET product_name = 'Unknown Product'
+            WHERE product_name IS NULL;
+
+ALTER TABLE order_items ALTER COLUMN product_name SET NOT NULL;
+
+UPDATE alembic_version SET version_num='646f565b7940' WHERE alembic_version.version_num = 'b22df6a0d648';
+
 COMMIT;
 

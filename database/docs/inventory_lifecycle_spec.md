@@ -29,55 +29,96 @@ At FreshLoop, stock is tracked per **Warehouse** rather than globally:
 
 ---
 
-## 3. Inventory Lifecycle State Machine
+## 3. Inventory & Order COD Lifecycle State Machine
+
+FreshLoop operates under a **Cash On Delivery (COD)** commercial model. Payment collection and physical stock deduction strictly coincide with verified doorstep delivery.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Available: Stock in Warehouse (qty > 0)
-    Available --> Reserved: Customer checks out (reserve_stock)
-    Reserved --> Sold: Payment Confirmed (deduct_stock)
-    Reserved --> Available: Payment Timeout / Cancel (release_stock)
-    Sold --> [*]: Order Delivered
+    [*] --> Available: Stock on Shelf (qty > 0)
+    Available --> PENDING_UNPAID: Customer Checks Out (RESERVE)
+    PENDING_UNPAID --> CONFIRMED_UNPAID: Staff Confirms Order (Dispatched)
+    CONFIRMED_UNPAID --> DELIVERED_PAID: Customer Receives & Pays COD (DEDUCT)
+    PENDING_UNPAID --> CANCELLED_UNPAID: Timeout 15m / Cancel (RELEASE)
+    CONFIRMED_UNPAID --> CANCELLED_UNPAID: Delivery Rejection / Cancel (RELEASE)
+    DELIVERED_PAID --> [*]: Order Fulfilled & Feature Store Recorded
+    CANCELLED_UNPAID --> [*]: Terminal State
 ```
 
-### Stage 1: Stock Reservation (`RESERVE`)
-- **Trigger:** Customer submits cart for checkout (`POST /api/v1/orders`).
-- **Condition:** Must verify:
+### Order Fields Specification (Frozen Alignment with Backend & Frontend):
+- **`orders.payment_method`**: `'COD'` (MVP strictly supports Cash On Delivery, enforced by `chk_order_payment_method`).
+- **`orders.payment_status`**: `'UNPAID'` / `'PAID'` (enforced by `chk_order_payment_status`).
+- **`order_items.product_name`**: Immutable snapshot of the product commercial title at order placement time, preserving historical fidelity regardless of subsequent product renames.
+
+---
+
+### Stage 1: Checkout & Stock Reservation (`RESERVE`)
+- **Trigger:** Customer places order (`POST /api/orders`).
+- **Status Transition:** `orders.status = 'PENDING'`, `orders.payment_status = 'UNPAID'`.
+- **Condition:** Validate available inventory for every item:
   $$\text{quantity} - \text{reserved\_quantity} \ge \text{requested\_qty}$$
 - **Atomic Database Mutation:**
   ```sql
-  -- Acquire row lock to prevent race condition
+  -- 1. Acquire row lock ordered by product UUID ascending (prevents deadlocks)
   SELECT inventory_id, quantity, reserved_quantity 
   FROM inventory_levels 
   WHERE warehouse_id = :wh_id AND product_id = :prod_id 
   FOR UPDATE;
 
-  -- If (quantity - reserved_quantity) >= :requested_qty:
+  -- 2. Reserve stock units
   UPDATE inventory_levels 
   SET reserved_quantity = reserved_quantity + :requested_qty,
       updated_at = NOW()
   WHERE warehouse_id = :wh_id AND product_id = :prod_id;
-  ```
-- **Result:** Order created with `status = 'PENDING'`.
 
-### Stage 2: Stock Deduction (`DEDUCT`)
-- **Trigger:** Payment confirmed / Order confirmed (`status -> 'CONFIRMED'`).
+  -- 3. Persist Order and OrderItems (with frozen product_name snapshot)
+  INSERT INTO orders (order_id, user_id, warehouse_id, order_number, status, payment_method, payment_status, total_amount, delivery_address)
+  VALUES (:id, :user_id, :wh_id, :order_num, 'PENDING', 'COD', 'UNPAID', :amount, :address);
+
+  INSERT INTO order_items (order_item_id, order_id, product_id, product_name, quantity, unit_price, total_price)
+  VALUES (:item_id, :id, :prod_id, :prod_name, :qty, :unit_price, :total_price);
+  ```
+
+### Stage 2: Staff / Store Confirmation
+- **Trigger:** Warehouse staff accepts order for packing and shipping.
+- **Status Transition:** `orders.status = 'CONFIRMED'`, `orders.payment_status = 'UNPAID'`.
+- **Inventory State:** Units remain in `reserved_quantity`. Physical shelf stock is NOT deducted yet.
+- **Worker Policy:** Orders in `CONFIRMED` status are **NEVER** cancelled by the 15-minute pending timeout worker.
+
+### Stage 3: Delivery & COD Collection (`DEDUCT`)
+- **Trigger:** Shipper delivers goods, collects cash, and calls delivery completion API.
+- **Status Transition:** `orders.status = 'DELIVERED'`, `orders.payment_status = 'PAID'`.
 - **Atomic Database Mutation:**
   ```sql
+  -- 1. Guard against duplicate execution (Idempotent Delivery Guard)
+  UPDATE orders 
+  SET status = 'DELIVERED', payment_status = 'PAID'
+  WHERE order_id = :order_id AND status = 'CONFIRMED';
+  -- Proceed only if rowcount == 1 (first execution)
+
+  -- 2. Deduct physical stock and release reservation simultaneously
   UPDATE inventory_levels 
   SET quantity = quantity - :requested_qty,
       reserved_quantity = reserved_quantity - :requested_qty,
       updated_at = NOW()
   WHERE warehouse_id = :wh_id AND product_id = :prod_id;
-  ```
-- **SSE Notification:** If `quantity == 0`, trigger SSE event:
-  `{ sku: '...', warehouse_id: '...', quantity: 0, status: 'OUT_OF_STOCK' }`  
-  and Redis cache invalidation (`HDEL predicted_cart:{user_id} {product_id}`).
 
-### Stage 3: Stock Release (`RELEASE`)
-- **Trigger:** Checkout timeout (15 mins), card declined, or order cancelled (`status -> 'CANCELLED'`).
+  -- 3. Record PurchaseHistory Feature Store exactly once
+  INSERT INTO purchase_history (history_id, user_id, product_id, total_purchases, last_purchased_at, recency_score, implicit_rating)
+  VALUES (...)
+  ON CONFLICT (user_id, product_id) DO UPDATE 
+  SET total_purchases = purchase_history.total_purchases + 1, ...;
+  ```
+- **SSE Notification:** If updated `quantity == 0`, emit real-time event to connected storefronts:
+  `{ sku: '...', warehouse_id: '...', quantity: 0, status: 'OUT_OF_STOCK' }`  
+  and invalidate Redis recommendation cache (`HDEL predicted_cart:{user_id} {product_id}`).
+
+### Stage 4: Order Cancellation & Inventory Release (`RELEASE`)
+- **Trigger:** Customer cancels order, or 15-minute timeout worker expires a `PENDING` order.
+- **Status Transition:** `orders.status = 'CANCELLED'`, `orders.payment_status = 'UNPAID'`.
 - **Atomic Database Mutation:**
   ```sql
+  -- Release reservation back to available shelf stock
   UPDATE inventory_levels 
   SET reserved_quantity = reserved_quantity - :requested_qty,
       updated_at = NOW()

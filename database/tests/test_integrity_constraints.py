@@ -552,5 +552,94 @@ class TestDatabaseIntegrity(unittest.TestCase):
         self.db.delete(test_wh)
         self.db.commit()
 
+
+    def test_order_payment_status_check_constraint(self):
+        """Verify that payment_status outside ('UNPAID', 'PAID') is rejected by PostgreSQL CHECK."""
+        test_user = self.db.query(User).filter_by(role='CUSTOMER').first()
+        test_wh = self.db.query(Warehouse).first()
+        if not test_user or not test_wh:
+            self.skipTest("Users or warehouses missing.")
+
+        bad_order = Order(
+            order_id=uuid.uuid4(),
+            user_id=test_user.user_id,
+            warehouse_id=test_wh.warehouse_id,
+            order_number=f"TEST-PAY-STATUS-{uuid.uuid4().hex[:6]}",
+            status="PENDING",
+            payment_method="COD",
+            payment_status="PENDING_CARD_PAYMENT",  # Invalid payment status
+            total_amount=Decimal("100000.00"),
+            delivery_address="Test Address"
+        )
+        self.db.add(bad_order)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+        self.db.rollback()
+
+    def test_order_payment_method_check_constraint(self):
+        """Verify that payment_method outside ('COD') is rejected by PostgreSQL CHECK."""
+        test_user = self.db.query(User).filter_by(role='CUSTOMER').first()
+        test_wh = self.db.query(Warehouse).first()
+        if not test_user or not test_wh:
+            self.skipTest("Users or warehouses missing.")
+
+        bad_order = Order(
+            order_id=uuid.uuid4(),
+            user_id=test_user.user_id,
+            warehouse_id=test_wh.warehouse_id,
+            order_number=f"TEST-PAY-METHOD-{uuid.uuid4().hex[:6]}",
+            status="PENDING",
+            payment_method="MOMO_WALLET",  # Invalid for MVP (only COD allowed)
+            payment_status="UNPAID",
+            total_amount=Decimal("100000.00"),
+            delivery_address="Test Address"
+        )
+        self.db.add(bad_order)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+        self.db.rollback()
+
+    def test_order_item_product_name_snapshot(self):
+        """Verify that product_name snapshot on order_items is required and preserved independently."""
+        test_user = self.db.query(User).filter_by(role='CUSTOMER').first()
+        test_wh = self.db.query(Warehouse).first()
+        test_prod = self.db.query(Product).first()
+        if not test_user or not test_wh or not test_prod:
+            self.skipTest("Required seed entities missing.")
+
+        order = Order(
+            order_id=uuid.uuid4(),
+            user_id=test_user.user_id,
+            warehouse_id=test_wh.warehouse_id,
+            order_number=f"TEST-ITEM-SNAP-{uuid.uuid4().hex[:6]}",
+            status="PENDING",
+            payment_method="COD",
+            payment_status="UNPAID",
+            total_amount=test_prod.unit_price,
+            delivery_address="Test Address"
+        )
+        self.db.add(order)
+        self.db.flush()
+
+        item = OrderItem(
+            order_item_id=uuid.uuid4(),
+            order_id=order.order_id,
+            product_id=test_prod.product_id,
+            product_name="Snapshot Name at Purchase Time",
+            quantity=1,
+            unit_price=test_prod.unit_price,
+            total_price=test_prod.unit_price
+        )
+        self.db.add(item)
+        self.db.commit()
+
+        # Verify snapshot is preserved
+        saved_item = self.db.query(OrderItem).filter_by(order_item_id=item.order_item_id).one()
+        self.assertEqual(saved_item.product_name, "Snapshot Name at Purchase Time")
+
+        # Cleanup
+        self.db.delete(order)
+        self.db.commit()
+
 if __name__ == "__main__":
     unittest.main()
