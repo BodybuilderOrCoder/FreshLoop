@@ -53,6 +53,7 @@ export type CreateOrderInput = {
 
 export type OrderItem = {
   product_id: string;
+  product_name?: string;
   quantity: number;
   unit_price?: number | string;
   line_total?: number | string;
@@ -61,70 +62,118 @@ export type OrderItem = {
 export type Order = {
   order_id: string;
   status: string;
+  warehouse_id?: string;
   total_amount: number | string;
   delivery_address?: string;
   created_at: string;
   items: OrderItem[];
 };
 
-async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+/** An HTTP error from the backend; `status` lets the UI choose a fallback. */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+const CONNECTION_ERROR =
+  "Cannot connect to the backend. Check that FastAPI is running.";
+
+/** Reads FastAPI's `detail` field, which is a string or a validation list. */
+async function readErrorDetail(response: Response): Promise<string> {
+  try {
+    const payload = (await response.json()) as {
+      detail?: string | { msg?: string }[];
+    };
+    if (typeof payload.detail === "string") return payload.detail;
+    if (Array.isArray(payload.detail)) {
+      return payload.detail
+        .map((item) => item.msg)
+        .filter(Boolean)
+        .join("; ");
+    }
+  } catch {
+    // The status still provides a useful error if the body is not JSON.
+  }
+  return "";
+}
+
+function describeError(
+  status: number,
+  statusText: string | undefined,
+  detail: string,
+  notFoundMessage?: string,
+): string {
+  const suffix = detail ? `: ${detail}` : "";
+
+  switch (status) {
+    case 401:
+      return "Please sign in to continue.";
+    case 403:
+      return "Your account is not allowed to perform this action.";
+    case 404:
+      // FastAPI answers "Not Found" for a missing route; any other detail
+      // comes from a handler (for example "Product not found").
+      if (detail && detail !== "Not Found") return detail;
+      return notFoundMessage ?? "The requested resource was not found.";
+    case 409:
+      return detail || "Some items no longer have enough stock. Please review your cart.";
+    case 422:
+      return `Invalid request${suffix}`;
+    default:
+      return `Backend request failed (${status}${statusText ? ` ${statusText}` : ""})${suffix}.`;
+  }
+}
+
+type RequestOptions = {
+  method?: "GET" | "POST";
+  body?: unknown;
+  signal?: AbortSignal;
+  notFoundMessage?: string;
+};
+
+async function requestJson<T>(
+  path: string,
+  { method = "GET", body, signal, notFoundMessage }: RequestOptions = {},
+): Promise<T> {
   let response: Response;
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
       signal,
-      headers: { Accept: "application/json" },
+      headers: body === undefined
+        ? { Accept: "application/json" }
+        : { Accept: "application/json", "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
     });
   } catch (error) {
     if (signal?.aborted) throw error;
-    throw new Error(
-      "Cannot connect to the backend. Check that FastAPI is running.",
-    );
+    throw new Error(CONNECTION_ERROR);
   }
 
   if (!response.ok) {
-    throw new Error(
-      `Backend request failed (${response.status} ${response.statusText}).`,
+    const detail = await readErrorDetail(response);
+    throw new ApiError(
+      response.status,
+      describeError(response.status, response.statusText, detail, notFoundMessage),
     );
   }
 
   return (await response.json()) as T;
 }
 
-async function sendJson<T>(path: string, body: unknown): Promise<T> {
-  let response: Response;
-
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw new Error("Cannot connect to the backend. Check that FastAPI is running.");
-  }
-
-  if (!response.ok) {
-    let detail = "";
-    try {
-      const payload = (await response.json()) as { detail?: string };
-      detail = payload.detail ? `: ${payload.detail}` : "";
-    } catch {
-      // The status still provides a useful error if the body is not JSON.
-    }
-
-    if (response.status === 404) {
-      throw new Error("This API is not available yet. The backend commerce service has not been deployed.");
-    }
-
-    throw new Error(`Backend request failed (${response.status})${detail}`);
-  }
-
-  return (await response.json()) as T;
+function fetchJson<T>(
+  path: string,
+  signal?: AbortSignal,
+  notFoundMessage?: string,
+): Promise<T> {
+  return requestJson<T>(path, { signal, notFoundMessage });
 }
 
 export function getWarehouses(signal?: AbortSignal): Promise<Warehouse[]> {
@@ -154,7 +203,11 @@ export function getInventoryEventsUrl(warehouseId: string): string {
 }
 
 export function getProduct(productId: string, signal?: AbortSignal): Promise<ProductDetails> {
-  return fetchJson<ProductDetails>(`/api/products/${encodeURIComponent(productId)}`, signal);
+  return fetchJson<ProductDetails>(
+    `/api/products/${encodeURIComponent(productId)}`,
+    signal,
+    "This product could not be found.",
+  );
 }
 
 export async function getRecommendations(
@@ -165,14 +218,24 @@ export async function getRecommendations(
   const result = await fetchJson<RecommendationItem[] | { items: RecommendationItem[] }>(
     `/api/recommendations/${encodeURIComponent(userId)}?warehouse_id=${encodeURIComponent(warehouseId)}`,
     signal,
+    "Quick Reorder is not connected to the recommendation service yet.",
   );
   return Array.isArray(result) ? result : result.items;
 }
 
 export function createOrder(input: CreateOrderInput): Promise<Order> {
-  return sendJson<Order>("/api/orders", input);
+  return requestJson<Order>("/api/orders", {
+    method: "POST",
+    body: input,
+    notFoundMessage:
+      "This API is not available yet. The backend commerce service has not been deployed.",
+  });
 }
 
 export function getOrder(orderId: string, signal?: AbortSignal): Promise<Order> {
-  return fetchJson<Order>(`/api/orders/${encodeURIComponent(orderId)}`, signal);
+  return fetchJson<Order>(
+    `/api/orders/${encodeURIComponent(orderId)}`,
+    signal,
+    "This order could not be found.",
+  );
 }

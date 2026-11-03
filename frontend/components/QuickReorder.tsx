@@ -39,9 +39,16 @@ export default function QuickReorder({
         </div>
         <div className="reorder-panel">
           <div className="reorder-panel-head">
-            <span>↻ Your quick reorder</span>
+            <span>Your quick reorder</span>
             <span className="reorder-demo">TOP PICKS</span>
           </div>
+          {!loading && repeatProducts.length === 0 && (
+            <p className="reorder-empty">
+              {error
+                ? "Your picks will appear here once recommendations are available."
+                : "No in-stock picks at this warehouse yet."}
+            </p>
+          )}
           {repeatProducts
             .map((p) => (
               <div className="reorder-row" key={p.id}>
@@ -56,7 +63,9 @@ export default function QuickReorder({
               </div>
             ))}
           <div className="reorder-total">
-            <span>{repeatProducts.length} everyday favorites</span>
+            <span>
+              {repeatProducts.length} everyday {repeatProducts.length === 1 ? "favorite" : "favorites"}
+            </span>
             <strong>
               {money(repeatProducts.reduce((s, p) => s + p.price, 0))}
             </strong>

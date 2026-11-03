@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FreshLoop Frontend
 
-## Getting Started
+Customer storefront for FreshLoop, built with Next.js (App Router), React and TypeScript.
 
-First, run the development server:
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd frontend
+npm install
+cp .env.example .env.local   # then edit the values
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The storefront needs the FastAPI backend (default `http://localhost:8000`) with migrated and seeded data. See the backend and database READMEs.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | FastAPI base URL, no trailing slash. Defaults to `http://localhost:8000`. |
+| `NEXT_PUBLIC_DEMO_USER_ID` | Seeded customer UUID used for Quick Reorder until storefront sign-in exists. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Checks
 
-## Learn More
+```bash
+npm test        # node --test: API client, cart, catalog and mapper logic
+npm run lint
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Path | Contents |
+| --- | --- |
+| `app/` | Routes: home (`/`), product details (`/product/[productId]`), order status (`/orders/[orderId]`), favorites |
+| `components/` | UI sections and reusable parts (header, product card, cart drawer, Quick Reorder) |
+| `hooks/` | `useCatalog` (warehouses, stock, live SSE updates), `useCart`, `useFavorites` |
+| `lib/api.ts` | The only module that calls the backend; shared request types and error handling |
+| `lib/*-logic.ts`, `lib/product-mapper.ts` | Pure logic covered by `tests/` |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Customer journey
 
-## Deploy on Vercel
+1. Choose a warehouse. Catalog and stock come from `GET /api/warehouses/{id}/products`.
+2. Stock badges update without reload via the warehouse SSE stream.
+3. Add items from the catalog or a product page; quantities are capped at available stock.
+4. Check out from the cart drawer (`POST /api/orders`), then land on `/orders/{id}?placed=1`.
+5. Quick Reorder shows in-stock Top-10 picks from `GET /api/recommendations/{user_id}`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The API contract the frontend relies on is in [docs/api-contract.md](docs/api-contract.md).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Known limitations
+
+- `POST /api/orders`, `GET /api/orders/{id}` and `GET /api/recommendations/{user_id}` are not registered in the backend yet. Checkout and Quick Reorder show a clear "not available yet" message until they are.
+- No storefront sign-in yet; Quick Reorder uses `NEXT_PUBLIC_DEMO_USER_ID` and orders are sent without an `Authorization` header.
+- No online payment.

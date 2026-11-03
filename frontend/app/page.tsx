@@ -43,6 +43,7 @@ export default function Home() {
     selectWarehouse,
     loading: catalogLoading,
     error: catalogError,
+    liveStatus,
   } = useCatalog();
 
   const { cart, count, subtotal, delivery, changeQty, clearCart } =
@@ -100,6 +101,15 @@ export default function Home() {
     sort,
     tr,
   ]);
+
+  // Product pages link to "/?cart=open" so shoppers land in their cart.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("cart") !== "open") return;
+    url.searchParams.delete("cart");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    void Promise.resolve().then(() => setCartOpen(true));
+  }, []);
 
   useEffect(() => {
     if (!warehouse?.warehouse_id) return;
@@ -244,6 +254,22 @@ export default function Home() {
                     ? `Showing stock for ${warehouse.code}`
                     : "Select a warehouse to view inventory."}
               </p>
+
+              {warehouse && !catalogLoading && !catalogError && (
+                <p
+                  className={`live-status live-status--${liveStatus}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {liveStatus === "live"
+                    ? "Live stock updates on"
+                    : liveStatus === "offline"
+                      ? "Live updates unavailable"
+                      : liveStatus === "reconnecting"
+                        ? "Reconnecting to live stock..."
+                        : "Connecting to live stock..."}
+                </p>
+              )}
             </div>
           </section>
         )}
@@ -335,7 +361,7 @@ export default function Home() {
           delivery={delivery}
             onOrderCreated={(orderId) => {
               clearCart();
-              router.push(`/orders/${orderId}`);
+              router.push(`/orders/${encodeURIComponent(orderId)}?placed=1`);
             }}
         />
       )}

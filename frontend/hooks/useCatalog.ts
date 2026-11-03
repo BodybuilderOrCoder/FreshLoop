@@ -24,6 +24,8 @@ import {
   getActiveWarehouses,
 } from "../lib/catalog-logic";
 
+export type LiveStatus = "connecting" | "live" | "reconnecting" | "offline";
+
 export function useCatalog() {
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -160,6 +162,16 @@ export function useCatalog() {
       (item) => item.warehouse_id === warehouseId,
     ) ?? null;
 
+  // Keyed by warehouse so switching warehouses reads as "connecting"
+  // without resetting state inside the effect.
+  const [liveState, setLiveState] = useState<{
+    warehouseId: string;
+    status: LiveStatus;
+  }>({ warehouseId: "", status: "connecting" });
+
+  const liveStatus: LiveStatus =
+    liveState.warehouseId === warehouseId ? liveState.status : "connecting";
+
   // Inventory events are authoritative. Refreshing after each event keeps
   // product metadata and stock correct while the event payload evolves.
   useEffect(() => {
@@ -167,6 +179,13 @@ export function useCatalog() {
 
     const events = new EventSource(getInventoryEventsUrl(warehouseId));
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // EventSource reconnects by itself; a new snapshot then refreshes stock.
+    events.onopen = () => setLiveState({ warehouseId, status: "live" });
+    events.onerror = () => setLiveState({
+      warehouseId,
+      status: events.readyState === EventSource.CLOSED ? "offline" : "reconnecting",
+    });
 
     const refresh = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
@@ -196,5 +215,6 @@ export function useCatalog() {
     selectWarehouse,
     loading,
     error,
+    liveStatus,
   };
 }

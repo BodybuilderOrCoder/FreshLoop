@@ -245,7 +245,7 @@ export default function CartDrawer({
                 <button className="primary-button full" onClick={() => setCheckout(true)}>
                   Continue to checkout <span>→</span>
                 </button>
-                <small>Demo only · No real orders or payments</small>
+                <small>No online payment in this demo</small>
               </div>
             )}
           </>

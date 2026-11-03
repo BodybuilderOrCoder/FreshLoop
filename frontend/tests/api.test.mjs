@@ -196,3 +196,75 @@ test("does not return partial inventory when a later page fails", async () => {
     await assert.rejects(getWarehouseProducts("warehouse-1"), /503/);
   });
 });
+
+function errorResponse(status, body) {
+  return {
+    ok: false,
+    status,
+    statusText: "",
+    json: async () => body,
+  };
+}
+
+test("createOrder surfaces the backend insufficient-stock detail", async () => {
+  const { ApiError } = await import("../lib/api.ts");
+  await withMockFetch(
+    async () => errorResponse(409, { detail: "Insufficient stock for TEST-001" }),
+    async () => {
+      await assert.rejects(
+        createOrder({ warehouse_id: "w", delivery_address: "a", items: [] }),
+        (error) => error instanceof ApiError
+          && error.status === 409
+          && error.message === "Insufficient stock for TEST-001",
+      );
+    },
+  );
+});
+
+test("a missing route returns the endpoint-specific message", async () => {
+  await withMockFetch(
+    async () => errorResponse(404, { detail: "Not Found" }),
+    async () => {
+      await assert.rejects(
+        getRecommendations("customer-1", "warehouse-1"),
+        /Quick Reorder is not connected/,
+      );
+    },
+  );
+});
+
+test("a handler 404 keeps the backend detail", async () => {
+  const { getOrder } = await import("../lib/api.ts");
+  await withMockFetch(
+    async () => errorResponse(404, { detail: "Order not found" }),
+    async () => {
+      await assert.rejects(getOrder("order-1"), /: Order not found$/);
+    },
+  );
+});
+
+test("validation errors join FastAPI messages", async () => {
+  await withMockFetch(
+    async () => errorResponse(422, {
+      detail: [{ msg: "Field required" }, { msg: "Input should be greater than 0" }],
+    }),
+    async () => {
+      await assert.rejects(
+        createOrder({ warehouse_id: "w", delivery_address: "a", items: [] }),
+        /Invalid request: Field required; Input should be greater than 0/,
+      );
+    },
+  );
+});
+
+test("authentication errors ask the user to sign in", async () => {
+  await withMockFetch(
+    async () => errorResponse(401, { detail: "Not authenticated" }),
+    async () => {
+      await assert.rejects(
+        createOrder({ warehouse_id: "w", delivery_address: "a", items: [] }),
+        /Please sign in to continue/,
+      );
+    },
+  );
+});

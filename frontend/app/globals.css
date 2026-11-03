@@ -60,6 +60,35 @@
   font-size: 0.875rem;
 }
 
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.live-status::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.live-status--live {
+  color: #166534;
+}
+
+.live-status--live::before {
+  background: #16a34a;
+}
+
+.live-status--offline::before {
+  background: #b42318;
+}
+
 .checkout-error,
 .journey-error {
   margin: 0.75rem 0;
@@ -98,4 +127,53 @@
   margin-top: 1.5rem;
   font-size: 1.15rem;
   font-weight: 800;
+}
+
+.journey-stock {
+  color: #166534;
+  font-weight: 600;
+}
+
+.journey-stock.is-out {
+  color: #b42318;
+}
+
+.journey-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.journey-success {
+  margin: 1rem 0 0;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  background: #dcfce7;
+  color: #14532d;
+  font-weight: 600;
+}
+
+.journey-table {
+  width: 100%;
+  margin-top: 1rem;
+  border-collapse: collapse;
+}
+
+.journey-table th,
+.journey-table td {
+  padding: 0.6rem 0.25rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+.journey-table td:last-child,
+.journey-table th:last-child {
+  text-align: right;
+}
+
+.reorder-empty {
+  margin: 1rem 0;
+  color: #64748b;
 }
