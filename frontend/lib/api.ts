@@ -61,7 +61,10 @@ export type OrderItem = {
 
 export type Order = {
   order_id: string;
-  status: string;
+  order_number: string;
+  status: "PENDING" | "CONFIRMED" | "DELIVERED" | "CANCELLED";
+  payment_method: "COD";
+  payment_status: "UNPAID" | "PAID";
   warehouse_id?: string;
   total_amount: number | string;
   delivery_address?: string;
@@ -132,13 +135,14 @@ function describeError(
 type RequestOptions = {
   method?: "GET" | "POST";
   body?: unknown;
+  headers?: Record<string, string>;
   signal?: AbortSignal;
   notFoundMessage?: string;
 };
 
 async function requestJson<T>(
   path: string,
-  { method = "GET", body, signal, notFoundMessage }: RequestOptions = {},
+  { method = "GET", body, headers, signal, notFoundMessage }: RequestOptions = {},
 ): Promise<T> {
   let response: Response;
 
@@ -147,8 +151,12 @@ async function requestJson<T>(
       method,
       signal,
       headers: body === undefined
-        ? { Accept: "application/json" }
-        : { Accept: "application/json", "Content-Type": "application/json" },
+        ? { Accept: "application/json", ...headers }
+        : {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            ...headers,
+          },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
     });
@@ -223,10 +231,14 @@ export async function getRecommendations(
   return Array.isArray(result) ? result : result.items;
 }
 
-export function createOrder(input: CreateOrderInput): Promise<Order> {
+export function createOrder(
+  input: CreateOrderInput,
+  idempotencyKey: string,
+): Promise<Order> {
   return requestJson<Order>("/api/orders", {
     method: "POST",
     body: input,
+    headers: { "Idempotency-Key": idempotencyKey },
     notFoundMessage:
       "This API is not available yet. The backend commerce service has not been deployed.",
   });

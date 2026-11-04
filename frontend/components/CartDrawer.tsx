@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Category, Product } from "../data/products";
-import { createOrder } from "../lib/api";
+import { ApiError, createOrder } from "../lib/api";
 import { money } from "../utils/presentation";
 import type { Translate } from "../utils/presentation";
 type Props = {
@@ -38,8 +38,10 @@ export default function CartDrawer({
   onOrderCreated,
 }: Props) {
   const cartDialogRef = useRef<HTMLDialogElement>(null);
+  const checkoutRequest = useRef<{ fingerprint: string; key: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [canStartNewAttempt, setCanStartNewAttempt] = useState(false);
 
   useEffect(() => {
     const dialog = cartDialogRef.current;
@@ -66,7 +68,7 @@ export default function CartDrawer({
     };
   }, []);
 
-  const submitOrder = async () => {
+  const submitOrder = async (startNewAttempt = false) => {
     if (!address.trim()) {
       setSubmitError("Please enter a delivery address.");
       return;
@@ -86,17 +88,36 @@ export default function CartDrawer({
 
     setSubmitting(true);
     setSubmitError("");
+    setCanStartNewAttempt(false);
     try {
-      const order = await createOrder({
+      const input = {
         warehouse_id: warehouseId,
         delivery_address: address.trim(),
         items,
-      });
+      };
+      const fingerprint = JSON.stringify(input);
+      let request = checkoutRequest.current;
+      if (
+        startNewAttempt ||
+        !request ||
+        request.fingerprint !== fingerprint
+      ) {
+        request = {
+          fingerprint,
+          key: crypto.randomUUID(),
+        };
+        checkoutRequest.current = request;
+      }
+      const order = await createOrder(input, request.key);
       onOrderCreated(order.order_id);
+      checkoutRequest.current = null;
       setCartOpen(false);
       setCheckout(false);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to place the order.");
+      setCanStartNewAttempt(
+        error instanceof ApiError && error.status === 409,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -159,6 +180,15 @@ export default function CartDrawer({
               <strong>{money(subtotal + delivery)}</strong>
             </div>
             {submitError && <p className="checkout-error" role="alert">{submitError}</p>}
+            {canStartNewAttempt && (
+              <button
+                className="back-button"
+                onClick={() => void submitOrder(true)}
+                disabled={submitting}
+              >
+                Retry as a new checkout attempt
+              </button>
+            )}
             <button
               className="primary-button full"
               onClick={() => void submitOrder()}

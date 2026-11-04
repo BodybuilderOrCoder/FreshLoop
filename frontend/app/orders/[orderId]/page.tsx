@@ -76,7 +76,7 @@ export default function OrderStatusPage({ params, searchParams }: Props) {
     <main className="journey-page container">
       <Link href="/" className="journey-back">Back to shop</Link>
       <span className="section-kicker">ORDER STATUS</span>
-      <h1>{order ? `Order ${order.order_id.slice(0, 8)}` : "Your order"}</h1>
+      <h1>{order ? `Order ${order.order_number}` : "Your order"}</h1>
       {justPlaced && order && (
         <p className="journey-success" role="status">
           Thank you! Your order has been placed.
@@ -87,6 +87,7 @@ export default function OrderStatusPage({ params, searchParams }: Props) {
       {order && (
         <section className="journey-card">
           <p><strong>Status:</strong> {formatStatus(order.status)}</p>
+          <p><strong>Payment:</strong> Cash on delivery — {formatStatus(order.payment_status)}</p>
           <p><strong>Placed:</strong> {new Date(order.created_at).toLocaleString()}</p>
           {order.delivery_address && <p><strong>Delivery:</strong> {order.delivery_address}</p>}
           <table className="journey-table">

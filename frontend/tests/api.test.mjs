@@ -138,7 +138,7 @@ test("network failures return a connection error", async () => {
   );
 });
 
-test("createOrder sends the agreed commerce payload", async () => {
+test("createOrder sends the commerce payload and idempotency key", async () => {
   const input = {
     warehouse_id: "warehouse-1",
     delivery_address: "1 Fresh Street",
@@ -149,11 +149,51 @@ test("createOrder sends the agreed commerce payload", async () => {
   await withMockFetch(async (url, options) => {
     assert.equal(new URL(String(url)).pathname, "/api/orders");
     assert.equal(options.method, "POST");
+    assert.equal(options.headers["Idempotency-Key"], "checkout-key-1");
     assert.deepEqual(JSON.parse(options.body), input);
     return { ok: true, json: async () => order };
   }, async () => {
-    assert.deepEqual(await createOrder(input), order);
+    assert.deepEqual(await createOrder(input, "checkout-key-1"), order);
   });
+});
+
+test("a new checkout attempt uses a new idempotency key after conflict", async () => {
+  const input = {
+    warehouse_id: "warehouse-1",
+    delivery_address: "1 Fresh Street",
+    items: [{ product_id: "product-1", quantity: 2 }],
+  };
+  const keys = [];
+  let stockAvailable = false;
+
+  await withMockFetch(async (_url, options) => {
+    const key = options.headers["Idempotency-Key"];
+    keys.push(key);
+    if (key === "first-attempt-key") {
+      return errorResponse(409, { detail: "Insufficient available stock." });
+    }
+    assert.equal(stockAvailable, true);
+    return {
+      ok: true,
+      json: async () => ({ order_id: "order-1" }),
+    };
+  }, async () => {
+    await assert.rejects(
+      createOrder(input, "first-attempt-key"),
+      /Insufficient available stock/,
+    );
+    await assert.rejects(
+      createOrder(input, "first-attempt-key"),
+      /Insufficient available stock/,
+    );
+    stockAvailable = true;
+    await createOrder(input, "new-attempt-key");
+  });
+
+  assert.deepEqual(
+    keys,
+    ["first-attempt-key", "first-attempt-key", "new-attempt-key"],
+  );
 });
 
 test("getRecommendations accepts an items response envelope", async () => {
@@ -212,7 +252,10 @@ test("createOrder surfaces the backend insufficient-stock detail", async () => {
     async () => errorResponse(409, { detail: "Insufficient stock for TEST-001" }),
     async () => {
       await assert.rejects(
-        createOrder({ warehouse_id: "w", delivery_address: "a", items: [] }),
+        createOrder(
+          { warehouse_id: "w", delivery_address: "a", items: [] },
+          "conflict-key",
+        ),
         (error) => error instanceof ApiError
           && error.status === 409
           && error.message === "Insufficient stock for TEST-001",
@@ -250,7 +293,10 @@ test("validation errors join FastAPI messages", async () => {
     }),
     async () => {
       await assert.rejects(
-        createOrder({ warehouse_id: "w", delivery_address: "a", items: [] }),
+        createOrder(
+          { warehouse_id: "w", delivery_address: "a", items: [] },
+          "validation-key",
+        ),
         /Invalid request: Field required; Input should be greater than 0/,
       );
     },
@@ -262,7 +308,10 @@ test("authentication errors ask the user to sign in", async () => {
     async () => errorResponse(401, { detail: "Not authenticated" }),
     async () => {
       await assert.rejects(
-        createOrder({ warehouse_id: "w", delivery_address: "a", items: [] }),
+        createOrder(
+          { warehouse_id: "w", delivery_address: "a", items: [] },
+          "authentication-key",
+        ),
         /Please sign in to continue/,
       );
     },

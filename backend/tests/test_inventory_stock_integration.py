@@ -19,7 +19,7 @@ from app.services.inventory_stock import update_inventory_stock
 
 TEST_DATABASE_NAME = "freshloop_test_db"
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
-EXPECTED_REVISION = "948e2297107f"
+EXPECTED_REVISION = "a09364ca8d50"
 
 
 @unittest.skipUnless(

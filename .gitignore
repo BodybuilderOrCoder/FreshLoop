@@ -225,3 +225,6 @@ node_modules/
 .next/
 !lib/
 !lib/api.ts
+
+# Local database backups
+/backups/
