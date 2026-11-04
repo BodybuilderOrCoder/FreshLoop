@@ -86,7 +86,9 @@ class Warehouse(Base):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     location: Mapped[str] = mapped_column(Text, nullable=False)
     service_zone: Mapped[str] = mapped_column(String(50), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
 
     staff_assignments: Mapped[List["StaffWarehouseAssignment"]] = relationship(
         back_populates="warehouse", cascade="all, delete-orphan"
@@ -167,7 +169,20 @@ class Order(Base):
             "payment_status IN ('UNPAID', 'PAID')",
             name="chk_order_payment_status",
         ),
-        CheckConstraint("total_amount >= 0", name="chk_order_total_positive"),
+        CheckConstraint(
+            """
+            (
+                (status = 'DELIVERED' AND payment_status = 'PAID')
+                OR
+                (
+                    status IN ('PENDING', 'CONFIRMED', 'CANCELLED')
+                    AND payment_status = 'UNPAID'
+                )
+            )
+            """,
+            name="chk_order_payment_status_consistency",
+        ),
+            CheckConstraint("total_amount >= 0", name="chk_order_total_positive"),
         Index("idx_orders_user_timeline", "user_id", created_at.desc()),
     )
 
@@ -267,6 +282,7 @@ class IdempotencyRecord(Base):
         ),
     )
 
+
 class StaffWarehouseAssignment(Base):
     __tablename__ = "staff_warehouse_assignments"
 
@@ -284,9 +300,7 @@ class StaffWarehouseAssignment(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True, nullable=False
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     user: Mapped["User"] = relationship(back_populates="warehouse_assignments")
     warehouse: Mapped["Warehouse"] = relationship(back_populates="staff_assignments")
@@ -294,4 +308,3 @@ class StaffWarehouseAssignment(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "warehouse_id", name="uq_staff_warehouse"),
     )
-
