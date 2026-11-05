@@ -17,6 +17,7 @@ OUTPUT_CSV = REPO_ROOT / "recommender" / "sample_output" / "cache_latency_benchm
 
 
 def run_benchmark(num_users: int = 30, hit_iterations: int = 10):
+    """Measure Cache MISS and Cache HIT latency distributions (p50, p95)."""
     if not INTERACTIONS_PATH.exists():
         fallback_path = REPO_ROOT / "recommender" / "sample_output" / "interactions_sample.csv"
         df = pd.read_csv(fallback_path)
@@ -31,8 +32,8 @@ def run_benchmark(num_users: int = 30, hit_iterations: int = 10):
     miss_latencies = []
     hit_latencies = []
 
-    # 1. Đo Cache MISS (Xóa cache trước khi gọi)
-    log.info("--- Testing Cache MISS ---")
+    # 1. Benchmark Cache MISS (invalidate keys before invocation)
+    log.info("--- Measuring Cache MISS ---")
     for user_id in test_users:
         try:
             cache.invalidate(user_id, algorithm="baseline", top_k=10)
@@ -47,8 +48,8 @@ def run_benchmark(num_users: int = 30, hit_iterations: int = 10):
         if status == "MISS":
             miss_latencies.append(elapsed_ms)
 
-    # 2. Đo Cache HIT (Gọi lại nhiều lần khi đã có cache)
-    log.info("--- Testing Cache HIT ---")
+    # 2. Benchmark Cache HIT (repeated calls on warm cache)
+    log.info("--- Measuring Cache HIT ---")
     for _ in range(hit_iterations):
         for user_id in test_users:
             _, status, elapsed_ms = get_recommendations_with_meta(
@@ -60,29 +61,39 @@ def run_benchmark(num_users: int = 30, hit_iterations: int = 10):
             if status == "HIT":
                 hit_latencies.append(elapsed_ms)
 
-    # Tính toán p50, p95
     p50_miss = np.percentile(miss_latencies, 50) if miss_latencies else 0.0
     p95_miss = np.percentile(miss_latencies, 95) if miss_latencies else 0.0
 
     p50_hit = np.percentile(hit_latencies, 50) if hit_latencies else 0.0
     p95_hit = np.percentile(hit_latencies, 95) if hit_latencies else 0.0
 
-    print("\n========== KẾT QUẢ BENCHMARK (ms) ==========")
+    print("\n========== BENCHMARK RESULTS (ms) ==========")
     print(f"Cache MISS (N={len(miss_latencies)}): p50 = {p50_miss:.2f} ms | p95 = {p95_miss:.2f} ms")
     print(f"Cache HIT  (N={len(hit_latencies)}):  p50 = {p50_hit:.2f} ms | p95 = {p95_hit:.2f} ms")
     print("============================================\n")
 
-    # Lưu vào file CSV
     OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["metric", "sample_count", "p50_ms", "p95_ms", "mean_ms"])
         if miss_latencies:
-            writer.writerow(["cache_miss", len(miss_latencies), round(p50_miss, 2), round(p95_miss, 2), round(float(np.mean(miss_latencies)), 2)])
+            writer.writerow([
+                "cache_miss",
+                len(miss_latencies),
+                round(p50_miss, 2),
+                round(p95_miss, 2),
+                round(float(np.mean(miss_latencies)), 2),
+            ])
         if hit_latencies:
-            writer.writerow(["cache_hit", len(hit_latencies), round(p50_hit, 2), round(p95_hit, 2), round(float(np.mean(hit_latencies)), 2)])
+            writer.writerow([
+                "cache_hit",
+                len(hit_latencies),
+                round(p50_hit, 2),
+                round(p95_hit, 2),
+                round(float(np.mean(hit_latencies)), 2),
+            ])
 
-    log.info("Results saved to: %s", OUTPUT_CSV)
+    log.info("Benchmark output written to: %s", OUTPUT_CSV)
 
 
 if __name__ == "__main__":

@@ -24,17 +24,23 @@ def interactions():
 def memory_cache(monkeypatch):
     store = {}
 
-    def get_items(user_id, algorithm="baseline", top_k=config.TOP_K):
-        return store.get((str(user_id), algorithm, top_k))
+    def get_items(
+        user_id,
+        warehouse_id=None,
+        algorithm="baseline",
+        top_k=config.TOP_K,
+    ):
+        return store.get((str(user_id), warehouse_id, algorithm, top_k))
 
     def set_items(
         user_id,
         items,
+        warehouse_id=None,
         ttl=None,
         algorithm="baseline",
         top_k=config.TOP_K,
     ):
-        store[(str(user_id), algorithm, top_k)] = items
+        store[(str(user_id), warehouse_id, algorithm, top_k)] = items
 
     monkeypatch.setattr(service.cache, "get_items", get_items)
     monkeypatch.setattr(service.cache, "set_items", set_items)
@@ -124,8 +130,8 @@ def test_als_and_baseline_use_separate_cache_entries(
     assert baseline_items[0]["product_id"] == "baseline-p"
     assert als_items[0]["product_id"] == "als-p"
 
-    assert ("u1", "baseline", 1) in memory_cache
-    assert ("u1", "als", 1) in memory_cache
+    assert ("u1", None, "baseline", 1) in memory_cache
+    assert ("u1", None, "als", 1) in memory_cache
 
 
 def test_different_top_k_values_use_separate_cache_entries(
@@ -156,8 +162,8 @@ def test_different_top_k_values_use_separate_cache_entries(
     assert first_status == "MISS"
     assert second_status == "MISS"
     assert len(items) == 2
-    assert ("u1", "baseline", 1) in memory_cache
-    assert ("u1", "baseline", 2) in memory_cache
+    assert ("u1", None, "baseline", 1) in memory_cache
+    assert ("u1", None, "baseline", 2) in memory_cache
 
 
 def test_unknown_algorithm_is_rejected(interactions, memory_cache):

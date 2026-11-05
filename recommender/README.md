@@ -74,3 +74,80 @@ items, cache_status, latency_ms = get_recommendations_with_meta(
 
 # 2. Xóa cache sau khi user đặt đơn hàng mới:
 rec_cache.invalidate(user_id=str(user_id))
+
+
+## Backend Integration Contract (Member 2 — Tiến)
+
+### 1. Endpoint: `GET /api/recommendations/{user_id}`
+Query parameters:
+- `warehouse_id` (UUID, optional): Excludes out-of-stock items for the specified warehouse.
+- `top_k` (int, default: 10): Number of recommended items.
+- `algorithm` (str, default: `"baseline"`): Algorithm choice (`"baseline"` or `"als"`).
+
+Example FastAPI implementation:
+```python
+from uuid import UUID
+from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+import pandas as pd
+
+from app.database import get_db
+from app.models import InventoryLevel
+from recommender.service import get_recommendations_with_meta
+from recommender import config as rec_config
+
+router = APIRouter(prefix="/api/recommendations", tags=["Recommendations"])
+
+@router.get("/{user_id}")
+def get_recommendations_endpoint(
+    user_id: UUID,
+    warehouse_id: UUID | None = None,
+    top_k: int = Query(default=10, ge=1, le=50),
+    algorithm: str = Query(default="baseline", regex="^(baseline|als)$"),
+    db: Session = Depends(get_db),
+    response: Response = None,
+):
+    out_of_stock_ids = set()
+    if warehouse_id:
+        out_rows = db.execute(
+            select(InventoryLevel.product_id).where(
+                InventoryLevel.warehouse_id == warehouse_id,
+                (InventoryLevel.quantity - InventoryLevel.reserved_quantity) <= 0
+            )
+        ).scalars().all()
+        out_of_stock_ids = {str(pid) for pid in out_rows}
+
+    try:
+        interactions_df = pd.read_csv(rec_config.TRAIN_INTERACTIONS_PATH)
+    except Exception:
+        interactions_df = pd.DataFrame(columns=["user_id", "product_id", "purchase_count", "days_since_last", "implicit_rating"])
+
+    items, cache_status, elapsed_ms = get_recommendations_with_meta(
+        user_id=str(user_id),
+        inter=interactions_df,
+        top_k=top_k,
+        algorithm=algorithm,
+        warehouse_id=str(warehouse_id) if warehouse_id else None,
+        exclude_product_ids=out_of_stock_ids,
+    )
+
+    if response:
+        response.headers["X-Cache"] = cache_status
+
+    return {
+        "user_id": str(user_id),
+        "warehouse_id": str(warehouse_id) if warehouse_id else None,
+        "cache_status": cache_status,
+        "latency_ms": round(elapsed_ms, 2),
+        "items": items,
+    }
+```
+
+### 2. Cache Invalidation upon Checkout:
+When a customer completes a checkout order in `orders.py`:
+```python
+from recommender import cache as rec_cache
+
+rec_cache.invalidate(user_id=str(order.user_id))
+```
