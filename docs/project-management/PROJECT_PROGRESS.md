@@ -3,6 +3,8 @@
 **Baseline:** nhánh `dev`, HEAD `d31fd29`. **Ngày audit:** 03/11/2026 (Sprint Week 3: 02–08/11/2026).
 Đây là báo cáo hồi cứu dựa trên `WBS_FreshLoop.md`. Mọi KPI trong Research Proposal là **mục tiêu**, không phải kết quả đã đạt.
 
+> **Cập nhật 07/11/2026:** báo cáo bên dưới phản ánh ngày 03/11 và chưa được tính lại. Order API, đăng nhập trên storefront và checkout trên trình duyệt đã hoàn thành; API gợi ý vẫn chưa có. Trạng thái mới nhất và việc còn lại nằm ở [WEEK3_INTEGRATION_LOG.md](WEEK3_INTEGRATION_LOG.md).
+
 ## 1. Tóm tắt điều hành
 
 FreshLoop đã hoàn thiện phần **nền tảng dữ liệu, catalog theo kho, cập nhật tồn kho có bảo vệ và realtime**. Cụ thể:

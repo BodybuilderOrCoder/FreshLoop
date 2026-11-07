@@ -1,9 +1,9 @@
 # FreshLoop API Contract (frontend view)
 
-Status as of 03 Nov 2026. This file lists every backend call the storefront makes, as implemented in `frontend/lib/api.ts`.
+**Contract v1, published on 07 Nov 2026** against `dev` at `0625e49`. It matches the implemented routes and **awaits sign-off from Tiến, Thắng and Ân** before it counts as frozen. This file lists every backend call the storefront makes, as implemented in `frontend/lib/api.ts`. After sign-off, change it only with the agreement of the owners listed below.
 
 - **Implemented**: the route exists in `backend/app/routers/` and matches this contract.
-- **Proposed**: the frontend is ready, but the backend route does not exist yet. The owners must confirm or amend it before it is frozen.
+- **Planned**: the frontend is ready and the shape comes from the owners' integration sample, but the backend route does not exist yet.
 
 All IDs are UUID strings. Money fields are decimals that may be serialized as strings (`"25000.00"`); the frontend converts them with `Number()`.
 
@@ -16,9 +16,10 @@ All IDs are UUID strings. Money fields are decimals that may be serialized as st
 | GET | `/api/warehouses/{warehouse_id}/inventory/events` (SSE) | Implemented | Tiến + Ân |
 | PATCH | `/api/warehouses/{warehouse_id}/products/{product_id}/stock` | Implemented (staff only, not used by storefront) | Tiến |
 | GET | `/api/products/{product_id}` | Implemented | Tiến |
-| POST | `/api/orders` | **Proposed** | Tiến + Thắng |
-| GET | `/api/orders/{order_id}` | **Proposed** | Tiến |
-| GET | `/api/recommendations/{user_id}?warehouse_id=` | **Proposed** | Ân + Tiến |
+| POST | `/api/auth/register`, `/api/auth/login` | Implemented | Tiến |
+| POST | `/api/orders` | Implemented | Tiến + Thắng |
+| GET | `/api/orders/{order_id}` | Implemented | Tiến |
+| GET | `/api/recommendations/{user_id}?warehouse_id=` | **Planned, not implemented** | Ân + Tiến |
 
 ## Errors
 
@@ -26,9 +27,9 @@ FastAPI's error body: `{"detail": "message"}`, or for 422 a list `{"detail": [{"
 
 | Status | Shown to customer |
 | --- | --- |
-| 401 | "Please sign in to continue." |
+| 401 | "Please sign in to continue." (the login form shows "Invalid email or password.") |
 | 403 | "Your account is not allowed to perform this action." |
-| 404 | The `detail` text; if the route itself is missing (`"Not Found"`), an endpoint-specific "not available yet" message |
+| 404 | The `detail` text; if the route itself is missing (`"Not Found"`), an endpoint-specific message |
 | 409 | The `detail` text, or a generic insufficient-stock message |
 | 422 | "Invalid request: " + joined `msg` values |
 | other | "Backend request failed (status)" |
@@ -105,13 +106,23 @@ Used by the product details page and to name order lines. Returns 422 for a malf
 }
 ```
 
-## Proposed endpoints (need confirmation)
+## Authentication
+
+`POST /api/auth/register`: body `{email, password, name, phone, address?}`, unknown fields are rejected. `201`; `409` if the email or phone is already registered.
+
+`POST /api/auth/login`: body `{email, password}`. `200` returns `{access_token, token_type, expires_in}`; `401` `"Invalid email or password."`
+
+The token lasts 30 minutes. The storefront keeps it in `sessionStorage` and sends `Authorization: Bearer <token>`. It reads `sub` (user ID) and `role` for display only; the backend verifies the token on every request. When a request returns 401 the storefront clears the session and asks the customer to sign in again.
+
+Seeded accounts have placeholder password hashes and cannot sign in. Register a new account instead.
+
+## Orders
+
+One warehouse per order. The server calculates all prices and totals; the client sends only IDs and quantities. **Delivery is free**, so `total_amount` is the sum of the order lines. Payment is cash on delivery.
 
 ### POST /api/orders
 
-One warehouse per order (Week 2 decision). The server calculates prices and totals; the client sends only IDs and quantities.
-
-Request:
+Requires a CUSTOMER token and an `Idempotency-Key` header. The user comes from the token. Retrying with the same key and body replays the saved response and does not create a second order; the same key with a different body returns `409`.
 
 ```json
 {
@@ -123,25 +134,36 @@ Request:
 }
 ```
 
+`items` holds 1 to 100 lines. If `delivery_address` is omitted, the address on the customer profile is used; `409` if neither exists.
+
 Response `201`: the same body as `GET /api/orders/{order_id}`.
 
-Expected errors: `404` unknown warehouse or product, `409` insufficient stock (detail names the product), `422` invalid body, `401` if orders require sign-in.
+| Status | Meaning |
+| --- | --- |
+| 401 | Missing, invalid or expired token |
+| 403 | The account is not a customer |
+| 404 | Unknown warehouse, product or inventory record |
+| 409 | Insufficient stock, unavailable product, inactive warehouse, or idempotency key reuse |
+| 422 | Invalid body or missing `Idempotency-Key` |
 
-Open questions for Tiến and Thắng:
-1. Does checkout require `Authorization: Bearer <token>`, or is `user_id` taken from the token only? The storefront has no sign-in yet.
-2. Should the request carry an `Idempotency-Key` header, as the stock PATCH does? If so, add it to CORS `allow_headers` in `backend/app/main.py`.
-3. Which status does a new order start in, and which statuses can follow?
+A new order starts as `PENDING` / `UNPAID`. Stock is reserved, so `available_stock` drops immediately and `quantity` does not.
 
 ### GET /api/orders/{order_id}
+
+Requires a CUSTOMER token. Another customer's order returns `404`.
 
 ```json
 {
   "order_id": "c71e...",
-  "status": "PENDING",
+  "order_number": "FL-20261107-5FB979",
+  "user_id": "7d10...",
   "warehouse_id": "3f1c...",
+  "status": "PENDING",
+  "payment_method": "COD",
+  "payment_status": "UNPAID",
   "total_amount": "50000.00",
   "delivery_address": "12 Nguyễn Huệ, Q1",
-  "created_at": "2026-11-03T09:15:00Z",
+  "created_at": "2026-11-07T06:05:12Z",
   "items": [
     {
       "product_id": "9a2b...",
@@ -154,22 +176,40 @@ Open questions for Tiến and Thắng:
 }
 ```
 
-`warehouse_id`, `delivery_address`, `product_name`, `unit_price` and `line_total` are optional for the frontend. If `product_name` is missing, the page looks names up with `GET /api/products/{id}`.
+Status values: `PENDING`, `CONFIRMED`, `DELIVERED`, `CANCELLED`. The full lifecycle is in `database/docs/inventory_lifecycle_spec.md`.
+
+### Other order routes (not used by the storefront)
+
+| Method | Path | Role |
+| --- | --- | --- |
+| GET | `/api/orders` | Customer's own orders |
+| POST | `/api/orders/{order_id}/cancel` | Customer |
+| GET | `/api/warehouses/{warehouse_id}/orders?status=` | Assigned staff or admin |
+| POST | `/api/orders/{order_id}/confirm` | Assigned staff or admin, `Idempotency-Key` |
+| POST | `/api/orders/{order_id}/deliver` | Assigned staff or admin, `Idempotency-Key` |
+
+## Planned, not implemented yet
 
 ### GET /api/recommendations/{user_id}?warehouse_id={warehouse_id}
 
-Top-10 for a user, filtered to products in stock at that warehouse. The frontend accepts either a bare list or an `items` envelope:
+Shape taken from the integration sample in `recommender/README.md`. **The route does not exist yet**; owners are Tiến and Ân. The storefront sends the customer's bearer token when signed in.
+
+Query parameters: `warehouse_id`, `top_k` (default 10), `algorithm` (`baseline` or `als`, default `baseline`).
 
 ```json
 {
+  "user_id": "7d10...",
+  "warehouse_id": "3f1c...",
+  "cache_status": "HIT",
+  "latency_ms": 1.2,
   "items": [
-    { "product_id": "9a2b...", "score": 0.91 }
+    { "product_id": "9a2b...", "score": 0.91, "rank": 1, "source": "personal" }
   ]
 }
 ```
 
+`cache_status` is `HIT`, `MISS` or `BYPASS` (Redis unavailable). `source` is `personal` or `popular`; cold-start users receive popular products. The same value is sent in the `X-Cache` header.
+
 The frontend keeps the server's order, drops IDs not in the warehouse catalog or out of stock, and shows a fallback message on any error.
 
-Open questions for Ân and Tiến:
-1. Cold-start users: return popular products (preferred) or an empty list?
-2. Should the response say whether it was a cache HIT or MISS (for example, a `source` field or an `X-Cache` header) so the demo can show it?
+Still to decide when the route is added: whether a customer may only read their own recommendations. Without that check, any caller could read another customer's picks.

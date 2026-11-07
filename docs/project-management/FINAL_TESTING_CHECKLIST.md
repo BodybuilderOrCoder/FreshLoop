@@ -1,6 +1,6 @@
 # FreshLoop — Final Testing Checklist
 
-**Baseline:** nhánh `dev`, HEAD `d31fd29`. **Lần cập nhật trạng thái:** 03/11/2026.
+**Baseline:** nhánh `dev`, HEAD `d31fd29`. **Lần cập nhật trạng thái:** 03/11/2026; các dòng có mã EV-E2E được cập nhật 07/11/2026 trên `0625e49` cộng thay đổi frontend Week 3. Những dòng khác chưa được rà lại, kể cả các dòng BLOCKED mà nay đã có API.
 
 Một test chỉ được đánh **PASSED** khi có bằng chứng chạy thật (mã tham chiếu ở mục 1). Các trạng thái còn lại:
 
@@ -25,6 +25,9 @@ Các lần chạy đều trên Windows 11 với Docker Desktop (PostgreSQL 16-al
 | **EV-DB** | `DATABASE_URL=… PYTHONPATH=backend python -m unittest database.tests.test_integrity_constraints -v` | 13/13 pass |
 | **EV-MIG** | `alembic upgrade head` trên DB sạch; `downgrade` `b22df6a0d648` → `948e2297107f` → `upgrade head` | Thành công |
 | **EV-API** | Gọi API bằng `curl` tới `uvicorn app.main:app` (DB test), frontend `npm run dev` | Kết quả ghi ở từng test bên dưới |
+| **EV-FE-W3** | `cd frontend && npm test`, `npx eslint .`, `npx tsc --noEmit`, `npm run build` (07/11) | 43/43 pass; không lỗi |
+| **EV-BE-W3** | `pytest tests` với `TEST_DATABASE_URL` (07/11) | 157/157 pass |
+| **EV-E2E** | Smoke trên Edge với FastAPI và PostgreSQL thật, chạy 2 vòng (07/11) | 37/37 pass mỗi vòng; xem [evidence/week3](evidence/week3/) và [integration log](WEEK3_INTEGRATION_LOG.md) |
 
 ## 2. Cách chạy lại
 
@@ -51,12 +54,12 @@ cd ../frontend && npm test && npx eslint . && npm run build
 | AUTH-02 | Đăng ký trùng email hoặc số điện thoại | 409; transaction rollback | P0 | PASSED | EV-BE-948 (`test_postgres_unique_*`) |
 | AUTH-03 | Đăng ký có trường thừa (`full_name`) | 422 | P1 | PASSED | EV-API (422 `extra_forbidden`) |
 | AUTH-04 | Đăng nhập đúng | 200; có `access_token` JWT | P0 | PASSED | EV-API |
-| AUTH-05 | Đăng nhập sai mật khẩu | 401, thông báo không lộ thông tin nội bộ | P0 | NOT RUN | — |
+| AUTH-05 | Đăng nhập sai mật khẩu | 401, thông báo không lộ thông tin nội bộ | P0 | PASSED | EV-E2E (`AUTH-2`: 401, UI báo sai email hoặc mật khẩu) |
 | AUTH-06 | Đăng nhập bằng tài khoản seed (`staff@freshloop.vn`, `admin@freshloop.vn`) | Đăng nhập thành công | P0 | FAILED | `seed_mock_data.py` ghi `password_hash` giả (`pbkdf2:sha256:staff_secret_hash`), không phải hash Argon2 |
 | AUTH-07 | Gọi API stock mutation không có token | 401 | P0 | PASSED | EV-API |
-| AUTH-08 | Customer gọi API stock mutation | 403 | P0 | NOT RUN | Có unit test trong `tests/test_auth_dependencies.py` (EV-BE), chưa chạy qua HTTP |
+| AUTH-08 | Customer gọi API stock mutation | 403 | P0 | PASSED | EV-E2E (`SEC-1`: 403) |
 | AUTH-09 | Staff sửa tồn kho của kho không được phân công | 403 | P1 | FAILED | Router chỉ kiểm tra role; chưa dùng `staff_warehouse_assignments` (xem WBS 8.4) |
-| AUTH-10 | Token hết hạn hoặc bị sửa | 401 | P1 | NOT RUN | — |
+| AUTH-10 | Token hết hạn hoặc bị sửa | 401 | P1 | PASSED | EV-E2E (`AUTH-6`: token bị sửa, chuyển về đăng nhập). Chưa test token hết hạn thật |
 
 ## 4. Product API
 
@@ -85,22 +88,22 @@ cd ../frontend && npm test && npx eslint . && npm run build
 | --- | --- | --- | --- | --- | --- |
 | CART-01 | Thêm vượt số lượng tồn kho | Bị giới hạn ở `available_stock` | P0 | PASSED | EV-FE (`cart-logic.test.mjs`) |
 | CART-02 | Đổi kho khi giỏ có hàng không có ở kho mới | Hàng bị loại hoặc giảm số lượng | P0 | PASSED | EV-FE |
-| CART-03 | Tổng tiền và phí giao hàng (miễn phí từ 200.000₫) | Đúng | P0 | PASSED | EV-FE |
+| CART-03 | Tổng tiền giỏ bằng tổng tiền server (miễn phí giao hàng) | Đúng | P0 | PASSED | EV-E2E (`CHK-4`), EV-FE |
 | CART-04 | Reload trang | Giỏ được khôi phục từ `sessionStorage` | P1 | NOT RUN | Cần kiểm tra trên trình duyệt |
-| CART-05 | Thêm hàng từ trang chi tiết sản phẩm rồi mở `/?cart=open` | Giỏ mở với đúng số lượng | P1 | NOT RUN | Cần kiểm tra trên trình duyệt |
+| CART-05 | Thêm hàng từ trang chi tiết sản phẩm rồi mở `/?cart=open` | Giỏ mở với đúng số lượng | P1 | PASSED | EV-E2E (`CART-NAV`) |
 
 ## 7. Order / Checkout lifecycle
 
 | Test ID | Kịch bản | Kết quả mong đợi | Ưu tiên | Trạng thái | Bằng chứng |
 | --- | --- | --- | --- | --- | --- |
-| ORD-01 | `POST /api/orders` hợp lệ | 201; `orders` và `order_items` được lưu; server tính tổng | P0 | BLOCKED | EV-API: 404 (route chưa tồn tại) |
-| ORD-02 | Đặt số lượng vượt tồn kho | 409; không tạo đơn; tồn kho không đổi | P0 | BLOCKED | Phụ thuộc ORD-01 |
+| ORD-01 | `POST /api/orders` hợp lệ | 201; `orders` và `order_items` được lưu; server tính tổng | P0 | PASSED | EV-E2E (`CHK-3`, `CHK-6`: đơn trong DB khớp trang đơn hàng) |
+| ORD-02 | Đặt số lượng vượt tồn kho | 409; không tạo đơn; tồn kho không đổi | P0 | PASSED | EV-E2E (`CHK-9`: 409, giữ giỏ), EV-BE-W3 |
 | ORD-03 | Body không hợp lệ (items rỗng, quantity ≤ 0) | 422 | P1 | BLOCKED | Phụ thuộc ORD-01 |
-| ORD-04 | `GET /api/orders/{id}` của chính mình | 200, dữ liệu khớp DB | P0 | BLOCKED | EV-API: route chưa tồn tại |
-| ORD-05 | Đọc đơn của người khác | 403 hoặc 404 | P0 | BLOCKED | Phụ thuộc ORD-04 |
+| ORD-04 | `GET /api/orders/{id}` của chính mình | 200, dữ liệu khớp DB | P0 | PASSED | EV-E2E (`ORD-1`, `ORD-2`) |
+| ORD-05 | Đọc đơn của người khác | 403 hoặc 404 | P0 | PASSED | EV-E2E (`SEC-2`: 404) |
 | ORD-06 | Chuyển trạng thái hợp lệ / không hợp lệ | Chỉ cho phép theo state machine | P1 | BLOCKED | Chỉ có CHECK `chk_order_status` |
 | ORD-07 | Huỷ đơn | `CANCELLED`; trả lại `reserved_quantity` | P1 | BLOCKED | Có test DB `test_order_cancellation_releases_inventory` (EV-DB) nhưng chưa có API |
-| ORD-08 | Frontend: checkout khi API chưa có | Hiện "This API is not available yet…", không xoá giỏ | P1 | NOT RUN | Có xử lý trong `lib/api.ts` và `CartDrawer.tsx`, nhưng chưa có unit test cho 404 của `createOrder` |
+| ORD-08 | Frontend: checkout khi mất kết nối backend | Hiện lỗi kết nối, không xoá giỏ | P1 | PASSED | EV-E2E (`CHK-2`) |
 | ORD-09 | Frontend: lỗi 409 từ backend | Hiện `detail` (tên sản phẩm hết hàng) | P0 | PASSED | EV-FE (unit test với mock) |
 
 ## 8. COD payment state
@@ -137,7 +140,7 @@ cd ../frontend && npm test && npx eslint . && npm run build
 | --- | --- | --- | --- | --- | --- |
 | SSE-01 | Kết nối tới `/api/warehouses/{id}/inventory/events` | Nhận `inventory.snapshot` | P0 | PASSED | EV-API |
 | SSE-02 | Staff PATCH khi đang kết nối | Nhận `inventory.changed` với before/after đúng | P0 | PASSED | EV-API (112 → 107, `poll_interval_seconds=1`) |
-| SSE-03 | Trình duyệt cập nhật stock badge mà không reload | Badge đổi | P0 | NOT RUN | Cần ghi hình trên trình duyệt |
+| SSE-03 | Trình duyệt cập nhật stock badge mà không reload | Badge đổi | P0 | PASSED | EV-E2E (`LIVE-2`, trên trang chi tiết sản phẩm) |
 | SSE-04 | Đo staleness (≥ 30 mẫu, mặc định `poll_interval_seconds=2`) | p95 ≤ 5 s | P0 | NOT RUN | `recommender/measure_sse_delay.py` có, chưa có output |
 | SSE-05 | Ngắt kết nối rồi kết nối lại | Nhận snapshot mới; UI hiện "Reconnecting…" rồi "Live" | P1 | NOT RUN | — |
 | SSE-06 | Thay đổi ở kho A không gửi tới client đang nghe kho B | Không có event | P1 | NOT RUN | — |
@@ -164,8 +167,8 @@ cd ../frontend && npm test && npx eslint . && npm run build
 | INT-01 | CORS preflight từ `http://localhost:3000` | 200 | P0 | PASSED | EV-API |
 | INT-02 | Các trang `/`, `/product/{id}`, `/orders/{id}` | HTTP 200 | P0 | PASSED | EV-API |
 | INT-03 | Catalog trên UI khớp `GET /api/warehouses/{id}/products` | Khớp | P0 | NOT RUN | Cần kiểm tra trên trình duyệt |
-| INT-04 | Hành trình: chọn kho → thêm giỏ → checkout → trang đơn hàng | Thành công, giỏ được xoá sau khi đặt | P0 | BLOCKED | Phụ thuộc ORD-01 |
-| INT-05 | Responsive trên mobile và desktop | Không vỡ layout | P1 | NOT RUN | — |
+| INT-04 | Hành trình: chọn kho → thêm giỏ → checkout → trang đơn hàng | Thành công, giỏ được xoá sau khi đặt | P0 | PASSED | EV-E2E (`CHK-3` đến `CHK-8`) |
+| INT-05 | Responsive trên mobile và desktop | Không vỡ layout | P1 | PASSED | EV-E2E (`UI-1` đến `UI-3`: không tràn ngang ở 360 và 390 px) |
 | INT-06 | Quick Reorder hiện fallback khi API lỗi | Thông báo rõ ràng | P1 | PASSED | EV-FE (unit test thông báo 404) |
 
 ## 14. Database migrations
@@ -212,10 +215,10 @@ cd ../frontend && npm test && npx eslint . && npm run build
 
 | Trạng thái | Số test |
 | --- | --- |
-| PASSED | 32 |
+| PASSED | 44 |
 | FAILED | 5 |
-| BLOCKED | 19 |
-| NOT RUN | 34 |
+| BLOCKED | 14 |
+| NOT RUN | 27 |
 | **Tổng** | **90** |
 
 **Các FAILED cần xử lý trước:** AUTH-06 (password seed), MIG-05 (revision hard-code), AUTH-09 (phân quyền theo kho), SEC-02 (credentials), DEP-03 (pytest).

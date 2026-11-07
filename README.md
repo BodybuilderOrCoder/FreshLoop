@@ -37,7 +37,7 @@ Traditional grocery platforms share three bottlenecks. FreshLoop addresses them 
 
 ## 2. Features
 
-Status of the `dev` branch, verified on 3 Nov 2026. Details are in [docs/project-management/](docs/project-management/).
+Status of the `dev` branch, verified on 7 Nov 2026. Details are in [docs/project-management/](docs/project-management/).
 
 | Area | Feature | Status |
 | --- | --- | --- |
@@ -45,9 +45,9 @@ Status of the `dev` branch, verified on 3 Nov 2026. Details are in [docs/project
 | Cart | Client-side cart, capped at available stock, reconciled when the warehouse changes | ✅ Working |
 | Inventory | Staff/Admin stock updates with JWT auth and `Idempotency-Key`; cannot drop below reserved quantity | ✅ Working |
 | Real-time | Per-warehouse SSE (`inventory.snapshot`, `inventory.changed`); stock badges update live with a connection indicator | ✅ Working (DB snapshot polling) |
-| Accounts | Registration (Argon2), login (JWT), CUSTOMER / STAFF / ADMIN roles | ✅ API working · ⏳ no UI yet |
-| Recommendations | Frequency × recency baseline, ALS (`implicit`), popularity fallback, Redis HIT/MISS cache | ✅ Library level · ⏳ no API yet |
-| Orders | Checkout, order persistence, stock reservation, order status | ⏳ UI ready · ❌ no API yet |
+| Accounts | Registration (Argon2), login (JWT), CUSTOMER / STAFF / ADMIN roles, customer sign-in page | ✅ Working |
+| Recommendations | Frequency × recency baseline, ALS (`implicit`), popularity fallback, warehouse-aware Redis cache | ✅ Library level · ❌ no API yet |
+| Orders | Checkout, order persistence, stock reservation, order status (cash on delivery, free delivery) | ✅ Working |
 | Administration | Admin/operator dashboard | ❌ Not started |
 | Deployment | Vercel (frontend), Railway (backend, DB, Redis) | ❌ Not started |
 
@@ -73,7 +73,8 @@ FreshLoop is a **modular monolith**: one FastAPI process contains the Commerce, 
 │  (frontend/)             │ ◄──────────────────── │  ├─ auth: JWT, RBAC                  │
 │  catalog · cart · SSE UI │   SSE (text/event-    │  ├─ products, warehouses, inventory  │
 └──────────────────────────┘    stream)            │  ├─ inventory events (SSE)           │
-                                                   │  └─ (planned) orders, recommendations│
+                                                   │  ├─ orders                           │
+                                                   │  └─ (planned) recommendations        │
                                                    └───────────┬───────────────┬──────────┘
                                                                │ SQLAlchemy    │
                                                    ┌───────────▼──────┐  ┌─────▼──────────────┐
@@ -103,7 +104,7 @@ FreshLoop is a **modular monolith**: one FastAPI process contains the Commerce, 
 ```text
 FreshLoop/
 ├── frontend/              # Next.js storefront          → frontend/README.md
-│   ├── app/               #   routes: /, /product/[id], /orders/[id], /favorites
+│   ├── app/               #   routes: /, /login, /product/[id], /orders/[id], /favorites
 │   ├── components/ hooks/ lib/ styles/ tests/
 │   └── docs/api-contract.md
 ├── backend/               # FastAPI
@@ -113,7 +114,7 @@ FreshLoop/
 │   └── tests/
 ├── database/              # DB docs, ML data pipeline, train/test data, integrity tests → database/README.md
 ├── recommender/           # baseline, ALS, Redis cache, evaluation → recommender/README.md
-├── docs/project-management/  # WBS, progress report, testing checklist
+├── docs/project-management/  # WBS, progress, testing checklist, integration log, evidence
 ├── docker-compose.yml     # PostgreSQL + Redis for local development
 └── .env.example           # environment variables for backend and recommender
 ```
@@ -165,7 +166,7 @@ python seed_mock_data.py --clean     # load sample data: 50 users, 200 products,
 uvicorn app.main:app --reload --port 8000
 ```
 
-> `--clean` **deletes all existing data** before seeding. Omit it to keep your current data.
+> `--clean` **deletes all existing data** before seeding. Omit it to keep your current data. It currently fails once the database has `idempotency_records`, for example after any checkout; see [the integration log](docs/project-management/WEEK3_INTEGRATION_LOG.md).
 
 Check the backend:
 - http://localhost:8000/health returns `{"status":"ok"}`.
@@ -182,7 +183,7 @@ cp .env.example .env.local
 npm run dev                          # http://localhost:3000
 ```
 
-Quick Reorder needs `NEXT_PUBLIC_DEMO_USER_ID` in `.env.local`: the UUID of a seeded customer. To find one:
+Signed-in customers use their own account for Quick Reorder. To preview it while signed out, set `NEXT_PUBLIC_DEMO_USER_ID` in `.env.local` to the UUID of a seeded customer. To find one:
 
 ```bash
 docker exec freshloop-postgres psql -U freshloop_user -d freshloop_db \
@@ -199,10 +200,16 @@ python -m recommender.demo           # Top-10 for several users + cache MISS/HIT
 python -m recommender.evaluate       # Precision@10 / Recall@10 → recommender/sample_output/offline_evaluation.csv
 ```
 
-### 6.7 Try the real-time flow
+### 6.7 Try a checkout
+
+1. Open http://localhost:3000 and add products to the cart.
+2. Choose **Continue to checkout**, then **Sign in to continue**, and create an account. Seeded accounts cannot sign in.
+3. Enter a delivery address and place the order. The order page shows data stored on the server.
+
+### 6.8 Try the real-time flow
 
 1. Open http://localhost:3000. The status line next to the warehouse selector shows *Live stock updates on*.
-2. Register an account with `POST /api/auth/register` in Swagger.
+2. Register a separate staff account with `POST /api/auth/register` in Swagger.
 3. Promote it to STAFF:
    ```bash
    docker exec freshloop-postgres psql -U freshloop_user -d freshloop_db -c "UPDATE users SET role = 'STAFF' WHERE email = '<email>';"
@@ -220,7 +227,7 @@ python -m recommender.evaluate       # Precision@10 / Recall@10 → recommender/
 | `CORS_ORIGINS` | `.env` | No | Comma-separated origins; defaults allow `localhost:3000` and `localhost:5173` |
 | `REC_MODEL`, `REC_TOP_K`, `REC_CACHE_TTL_SECONDS`, `REC_HALF_LIFE_DAYS` | `.env` | No | Recommender settings |
 | `NEXT_PUBLIC_API_BASE_URL` | `frontend/.env.local` | No | Defaults to `http://localhost:8000` |
-| `NEXT_PUBLIC_DEMO_USER_ID` | `frontend/.env.local` | No | Customer UUID used for Quick Reorder |
+| `NEXT_PUBLIC_DEMO_USER_ID` | `frontend/.env.local` | No | Customer UUID for Quick Reorder while signed out |
 
 Default connection details for local development are in `docker-compose.yml`. **Never commit `.env` or `.env.local`.**
 
@@ -254,20 +261,22 @@ How to set up the separate test database, and the latest results, are in [FINAL_
 | GET | `/api/warehouses/{id}/products` | Products and stock for one warehouse | ✅ |
 | PATCH | `/api/warehouses/{id}/products/{product_id}/stock` | Stock update (STAFF/ADMIN, `Idempotency-Key`) | ✅ |
 | GET | `/api/warehouses/{id}/inventory/events` | SSE stream of stock changes | ✅ |
-| POST / GET | `/api/orders`, `/api/orders/{id}` | Place and view orders | ⏳ Proposed |
-| GET | `/api/recommendations/{user_id}?warehouse_id=` | Quick Reorder Top-10 | ⏳ Proposed |
+| POST / GET | `/api/orders`, `/api/orders/{id}` | Place and view orders (customer token, `Idempotency-Key`) | ✅ |
+| POST | `/api/orders/{id}/cancel`, `/confirm`, `/deliver` | Order lifecycle | ✅ |
+| GET | `/api/recommendations/{user_id}?warehouse_id=` | Quick Reorder Top-10 | ⏳ Planned |
 
 Request and response details are in [frontend/docs/api-contract.md](frontend/docs/api-contract.md) and in Swagger at `/docs`.
 
 ## 10. Current Status and Limitations
 
-Estimated completion is about **62%** (assessed on 3 Nov 2026; see [PROJECT_PROGRESS.md](docs/project-management/PROJECT_PROGRESS.md)). Main limitations:
+Status on 7 Nov 2026: the checkout journey works end to end in the browser; the recommendation path does not. Tracking is in [WEEK3_INTEGRATION_LOG.md](docs/project-management/WEEK3_INTEGRATION_LOG.md). The weighted estimate of 62% in [PROJECT_PROGRESS.md](docs/project-management/PROJECT_PROGRESS.md) dates from 3 Nov 2026 and has not been recalculated. Main limitations:
 
-- The order and recommendation APIs do not exist yet, so checkout and Quick Reorder are not complete in the UI.
+- The recommendation API does not exist yet, so Quick Reorder shows a fallback message.
+- `recommender` fails to import with `implicit` 0.7.3 on Python 3.12 until `recommender/als_model.py` is fixed.
 - Seeded accounts have placeholder `password_hash` values and **cannot log in**. Register a new account instead (see section 6.7).
 - SSE currently polls database snapshots (every 2 seconds by default); Redis Pub/Sub is not used yet.
 - Staff can update stock in any warehouse; the `staff_warehouse_assignments` restriction is not enforced yet.
-- No login UI, admin dashboard or online payment yet.
+- No staff or admin UI and no online payment yet.
 - Not deployed; the targets in section 3 have not been measured.
 
 ## 11. Changes from the Proposal
@@ -300,6 +309,6 @@ The proposal (4 Oct 2026) was the initial design. During implementation the team
 
 - Modules: [frontend/README.md](frontend/README.md) · [database/README.md](database/README.md) · [recommender/README.md](recommender/README.md)
 - API: [frontend/docs/api-contract.md](frontend/docs/api-contract.md)
-- Project management (Vietnamese): [WBS](docs/project-management/WBS_FreshLoop.md) · [Progress](docs/project-management/PROJECT_PROGRESS.md) · [Testing checklist](docs/project-management/FINAL_TESTING_CHECKLIST.md)
+- Project management (Vietnamese): [WBS](docs/project-management/WBS_FreshLoop.md) · [Progress](docs/project-management/PROJECT_PROGRESS.md) · [Testing checklist](docs/project-management/FINAL_TESTING_CHECKLIST.md) · [Week 3 integration log](docs/project-management/WEEK3_INTEGRATION_LOG.md)
 - Sprint plans: [Week 1](FreshLoop_Week1_Task_Assignment.md) · [Week 2](FreshLoop_Week2_Task_Assignment.md) · [Week 3](FreshLoop_Week3_Task_Assignment.md)
 - Collaboration rules: [RULE.md](RULE.md)

@@ -1,0 +1,197 @@
+{
+  "run": "1",
+  "delays": [
+    1864,
+    844,
+    848,
+    324,
+    2371
+  ],
+  "results": [
+    {
+      "id": "CAT-1 catalog loads from API",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "QR-1 signed-out Quick Reorder prompt",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "LIVE-1 live indicator",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "FEE-1 no delivery fee copy",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "AUTH-1 checkout asks for sign-in when signed out",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "AUTH-2 wrong password shows error",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "AUTH-3 register signs in and reopens the cart",
+      "ok": true,
+      "note": "http://localhost:3000/"
+    },
+    {
+      "id": "AUTH-4 sign-in returns to checkout with the cart intact",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "AUTH-5 header shows Sign out",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "CHK-1 empty address is rejected",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "CHK-2 network failure keeps the cart and shows an error",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "CHK-3 confirmation shows persisted order",
+      "ok": true,
+      "note": "Order FL-20261107-5A4C8B"
+    },
+    {
+      "id": "CHK-4 cart total equals server total",
+      "ok": true,
+      "note": "25000 vs 25000"
+    },
+    {
+      "id": "CHK-5 double submit created exactly one order",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "CHK-6 order row matches page",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "CHK-7 stock reserved",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "CHK-8 cart cleared after success",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "ORD-1 order page reloads from the server",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "ORD-2 refresh keeps the order",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "QR-2 honest fallback while the endpoint is missing",
+      "ok": true,
+      "note": "API 404"
+    },
+    {
+      "id": "QR-3 mocked contract: unknown IDs dropped, order kept",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "QR-4 request carries the customer's token",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "LIVE-2 staff stock change appears without reload",
+      "ok": true,
+      "note": "1864, 844, 848, 324, 2371 ms"
+    },
+    {
+      "id": "SEC-1 customer cannot change stock",
+      "ok": true,
+      "note": "403"
+    },
+    {
+      "id": "WH-1 warehouse selection survives navigation",
+      "ok": true,
+      "note": "MART-02"
+    },
+    {
+      "id": "CHK-9 insufficient stock (409) is shown, cart kept",
+      "ok": true,
+      "note": "Insufficient available stock."
+    },
+    {
+      "id": "CHK-10 retry as a new attempt is offered",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "AUTH-6 rejected token falls back to sign-in",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "AUTH-7 sign-in returns to the order",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "SEC-2 another customer cannot read the order",
+      "ok": true,
+      "note": "404"
+    },
+    {
+      "id": "AUTH-8 sign-out clears the session",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "id": "CART-NAV items added on two pages both stay in the cart",
+      "ok": true,
+      "note": "stored 2, shown 2"
+    },
+    {
+      "id": "UI-1 home: no horizontal overflow at 390 px",
+      "ok": true,
+      "note": "0"
+    },
+    {
+      "id": "UI-1b home: no horizontal overflow at 360 px",
+      "ok": true,
+      "note": "0"
+    },
+    {
+      "id": "UI-2 login: no horizontal overflow at 390 px",
+      "ok": true,
+      "note": "0"
+    },
+    {
+      "id": "UI-3 product: no horizontal overflow at 390 px",
+      "ok": true,
+      "note": "0"
+    },
+    {
+      "id": "JS-1 no uncaught browser errors",
+      "ok": true,
+      "note": ""
+    }
+  ]
+}
