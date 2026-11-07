@@ -1,6 +1,8 @@
 import type { Category } from "../data/products";
 import type { Translate } from "../utils/presentation";
 import Link from "next/link";
+import { useAuth } from "../hooks/useAuth";
+import { clearSession } from "../lib/auth";
 type Props = {
   tr: Translate;
   jumpToShop: (category?: Category) => void;
@@ -17,6 +19,8 @@ export default function Header({
   count,
   setCartOpen,
 }: Props) {
+  const { session } = useAuth();
+
   return (
     <header className="header">
       <div className="header-inner container">
@@ -79,6 +83,16 @@ export default function Header({
             <span aria-hidden="true">♡</span>
             <span>Favorites</span>
           </Link>
+
+          {session ? (
+            <button type="button" className="favorites-link" onClick={clearSession}>
+              Sign out
+            </button>
+          ) : (
+            <Link href="/login" className="favorites-link">
+              Sign in
+            </Link>
+          )}
 
           <button
             className="cart-button"

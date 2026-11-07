@@ -40,6 +40,19 @@ export type RecommendationItem = {
   score?: number;
 };
 
+export type LoginResponse = {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+};
+
+export type RegisterInput = {
+  email: string;
+  password: string;
+  name: string;
+  phone: string;
+};
+
 export type OrderLineInput = {
   product_id: string;
   quantity: number;
@@ -110,12 +123,13 @@ function describeError(
   statusText: string | undefined,
   detail: string,
   notFoundMessage?: string,
+  unauthorizedMessage?: string,
 ): string {
   const suffix = detail ? `: ${detail}` : "";
 
   switch (status) {
     case 401:
-      return "Please sign in to continue.";
+      return unauthorizedMessage ?? "Please sign in to continue.";
     case 403:
       return "Your account is not allowed to perform this action.";
     case 404:
@@ -137,26 +151,37 @@ type RequestOptions = {
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  accessToken?: string;
   notFoundMessage?: string;
+  unauthorizedMessage?: string;
 };
 
 async function requestJson<T>(
   path: string,
-  { method = "GET", body, headers, signal, notFoundMessage }: RequestOptions = {},
+  {
+    method = "GET",
+    body,
+    headers,
+    signal,
+    accessToken,
+    notFoundMessage,
+    unauthorizedMessage,
+  }: RequestOptions = {},
 ): Promise<T> {
+  const requestHeaders: Record<string, string> = {
+    Accept: "application/json",
+    ...headers,
+  };
+  if (body !== undefined) requestHeaders["Content-Type"] = "application/json";
+  if (accessToken) requestHeaders.Authorization = `Bearer ${accessToken}`;
+
   let response: Response;
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method,
       signal,
-      headers: body === undefined
-        ? { Accept: "application/json", ...headers }
-        : {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            ...headers,
-          },
+      headers: requestHeaders,
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
     });
@@ -169,7 +194,13 @@ async function requestJson<T>(
     const detail = await readErrorDetail(response);
     throw new ApiError(
       response.status,
-      describeError(response.status, response.statusText, detail, notFoundMessage),
+      describeError(
+        response.status,
+        response.statusText,
+        detail,
+        notFoundMessage,
+        unauthorizedMessage,
+      ),
     );
   }
 
@@ -182,6 +213,21 @@ function fetchJson<T>(
   notFoundMessage?: string,
 ): Promise<T> {
   return requestJson<T>(path, { signal, notFoundMessage });
+}
+
+export function login(email: string, password: string): Promise<LoginResponse> {
+  return requestJson<LoginResponse>("/api/auth/login", {
+    method: "POST",
+    body: { email, password },
+    unauthorizedMessage: "Invalid email or password.",
+  });
+}
+
+export function registerCustomer(input: RegisterInput): Promise<unknown> {
+  return requestJson<unknown>("/api/auth/register", {
+    method: "POST",
+    body: input,
+  });
 }
 
 export function getWarehouses(signal?: AbortSignal): Promise<Warehouse[]> {
@@ -222,11 +268,15 @@ export async function getRecommendations(
   userId: string,
   warehouseId: string,
   signal?: AbortSignal,
+  accessToken?: string,
 ): Promise<RecommendationItem[]> {
-  const result = await fetchJson<RecommendationItem[] | { items: RecommendationItem[] }>(
+  const result = await requestJson<RecommendationItem[] | { items: RecommendationItem[] }>(
     `/api/recommendations/${encodeURIComponent(userId)}?warehouse_id=${encodeURIComponent(warehouseId)}`,
-    signal,
-    "Quick Reorder is not connected to the recommendation service yet.",
+    {
+      signal,
+      accessToken,
+      notFoundMessage: "Quick Reorder is not connected to the recommendation service yet.",
+    },
   );
   return Array.isArray(result) ? result : result.items;
 }
@@ -234,20 +284,24 @@ export async function getRecommendations(
 export function createOrder(
   input: CreateOrderInput,
   idempotencyKey: string,
+  accessToken: string,
 ): Promise<Order> {
   return requestJson<Order>("/api/orders", {
     method: "POST",
     body: input,
     headers: { "Idempotency-Key": idempotencyKey },
-    notFoundMessage:
-      "This API is not available yet. The backend commerce service has not been deployed.",
+    accessToken,
   });
 }
 
-export function getOrder(orderId: string, signal?: AbortSignal): Promise<Order> {
-  return fetchJson<Order>(
-    `/api/orders/${encodeURIComponent(orderId)}`,
+export function getOrder(
+  orderId: string,
+  accessToken: string,
+  signal?: AbortSignal,
+): Promise<Order> {
+  return requestJson<Order>(`/api/orders/${encodeURIComponent(orderId)}`, {
     signal,
-    "This order could not be found.",
-  );
+    accessToken,
+    notFoundMessage: "This order could not be found.",
+  });
 }

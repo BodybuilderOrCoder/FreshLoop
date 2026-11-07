@@ -178,6 +178,7 @@ export function useCatalog() {
     if (!warehouseId) return;
 
     const events = new EventSource(getInventoryEventsUrl(warehouseId));
+    const controller = new AbortController();
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     // EventSource reconnects by itself; a new snapshot then refreshes stock.
@@ -190,9 +191,12 @@ export function useCatalog() {
     const refresh = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
-        void getWarehouseProducts(warehouseId)
+        void getWarehouseProducts(warehouseId, controller.signal)
           .then(mapInventoryProducts)
-          .then(setProducts)
+          .then((nextProducts) => {
+            // A late response must not replace another warehouse's stock.
+            if (!controller.signal.aborted) setProducts(nextProducts);
+          })
           .catch(() => {
             // Preserve the last usable catalog after a transient failure.
           });
@@ -204,6 +208,7 @@ export function useCatalog() {
 
     return () => {
       if (refreshTimer) clearTimeout(refreshTimer);
+      controller.abort();
       events.close();
     };
   }, [warehouseId]);

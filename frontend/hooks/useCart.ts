@@ -27,7 +27,12 @@ export function useCart(catalogProducts: Product[] = mockProducts) {
         restored.current = true;
       }
     }, 0);
-    return () => window.clearTimeout(restore);
+    return () => {
+      window.clearTimeout(restore);
+      // Next keeps visited pages mounted while hidden and re-runs effects when
+      // they return, so this page must re-read the cart before saving it.
+      restored.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -46,7 +51,7 @@ export function useCart(catalogProducts: Product[] = mockProducts) {
     setCart(reconcileCart(cart, catalogProducts));
   }
 
-  const { count, subtotal, delivery } = calculateCartSummary(
+  const { count, subtotal } = calculateCartSummary(
     cart,
     catalogProducts,
   );
@@ -68,7 +73,6 @@ export function useCart(catalogProducts: Product[] = mockProducts) {
     cart,
     count,
     subtotal,
-    delivery,
     changeQty,
     clearCart,
   };

@@ -138,7 +138,7 @@ test("network failures return a connection error", async () => {
   );
 });
 
-test("createOrder sends the commerce payload and idempotency key", async () => {
+test("createOrder sends the commerce payload, idempotency key and token", async () => {
   const input = {
     warehouse_id: "warehouse-1",
     delivery_address: "1 Fresh Street",
@@ -150,10 +150,11 @@ test("createOrder sends the commerce payload and idempotency key", async () => {
     assert.equal(new URL(String(url)).pathname, "/api/orders");
     assert.equal(options.method, "POST");
     assert.equal(options.headers["Idempotency-Key"], "checkout-key-1");
+    assert.equal(options.headers.Authorization, "Bearer token-1");
     assert.deepEqual(JSON.parse(options.body), input);
     return { ok: true, json: async () => order };
   }, async () => {
-    assert.deepEqual(await createOrder(input, "checkout-key-1"), order);
+    assert.deepEqual(await createOrder(input, "checkout-key-1", "token-1"), order);
   });
 });
 
@@ -179,11 +180,11 @@ test("a new checkout attempt uses a new idempotency key after conflict", async (
     };
   }, async () => {
     await assert.rejects(
-      createOrder(input, "first-attempt-key"),
+      createOrder(input, "first-attempt-key", "token-1"),
       /Insufficient available stock/,
     );
     await assert.rejects(
-      createOrder(input, "first-attempt-key"),
+      createOrder(input, "first-attempt-key", "token-1"),
       /Insufficient available stock/,
     );
     stockAvailable = true;
@@ -281,7 +282,61 @@ test("a handler 404 keeps the backend detail", async () => {
   await withMockFetch(
     async () => errorResponse(404, { detail: "Order not found" }),
     async () => {
-      await assert.rejects(getOrder("order-1"), /: Order not found$/);
+      await assert.rejects(getOrder("order-1", "token-1"), /: Order not found$/);
+    },
+  );
+});
+
+test("getOrder sends the access token", async () => {
+  const { getOrder } = await import("../lib/api.ts");
+  await withMockFetch(
+    async (_url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer token-1");
+      return { ok: true, json: async () => ({ order_id: "order-1" }) };
+    },
+    async () => {
+      await getOrder("order-1", "token-1");
+    },
+  );
+});
+
+test("public catalog requests send no Authorization header", async () => {
+  await withMockFetch(
+    async (_url, options) => {
+      assert.equal("Authorization" in options.headers, false);
+      return { ok: true, json: async () => [] };
+    },
+    async () => {
+      await getWarehouses();
+    },
+  );
+});
+
+test("login returns the token and reports bad credentials clearly", async () => {
+  const { login } = await import("../lib/api.ts");
+  const token = { access_token: "a.b.c", token_type: "bearer", expires_in: 1800 };
+
+  await withMockFetch(
+    async (url, options) => {
+      assert.equal(new URL(String(url)).pathname, "/api/auth/login");
+      assert.deepEqual(JSON.parse(options.body), {
+        email: "a@example.com",
+        password: "secret-pass",
+      });
+      return { ok: true, json: async () => token };
+    },
+    async () => {
+      assert.deepEqual(await login("a@example.com", "secret-pass"), token);
+    },
+  );
+
+  await withMockFetch(
+    async () => errorResponse(401, { detail: "Invalid email or password." }),
+    async () => {
+      await assert.rejects(
+        login("a@example.com", "wrong"),
+        /Invalid email or password/,
+      );
     },
   );
 });

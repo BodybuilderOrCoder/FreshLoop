@@ -78,14 +78,6 @@
   padding: 24px;
   border-top: 1px solid #edf0ec;
 }
-.delivery-hint {
-  background: #e8f7e9;
-  color: #237e43;
-  border-radius: 8px;
-  padding: 11px;
-  font-size: 12px;
-  margin-bottom: 20px;
-}
 .checkout-summary {
   display: flex;
   justify-content: space-between;

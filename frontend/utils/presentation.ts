@@ -4,7 +4,6 @@ export const vi: Record<string, string> = {
   "Quick reorder": "Mua lại nhanh",
   "How it works": "Cách hoạt động",
   "Fresh groceries, smarter shopping": "Rau củ tươi, mua sắm thông minh",
-  "Free delivery on orders over 200,000₫": "Miễn phí giao hàng cho đơn từ 200.000₫",
   "YOUR NEIGHBORHOOD, DELIVERED": "GIAO HÀNG TẬN KHU PHỐ",
   "Fresh picks.": "Thực phẩm tươi.",
   "Less thinking.": "Ít phải nghĩ.",

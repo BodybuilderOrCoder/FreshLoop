@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Category, Product } from "../data/products";
+import { useAuth } from "../hooks/useAuth";
 import { ApiError, createOrder } from "../lib/api";
+import { clearSession } from "../lib/auth";
 import { money } from "../utils/presentation";
 import type { Translate } from "../utils/presentation";
 type Props = {
@@ -16,7 +19,6 @@ type Props = {
   address: string;
   setAddress: (value: string) => void;
   subtotal: number;
-  delivery: number;
   warehouseId: string;
   onOrderCreated: (orderId: string) => void;
 };
@@ -33,10 +35,10 @@ export default function CartDrawer({
   address,
   setAddress,
   subtotal,
-  delivery,
   warehouseId,
   onOrderCreated,
 }: Props) {
+  const { session } = useAuth();
   const cartDialogRef = useRef<HTMLDialogElement>(null);
   const checkoutRequest = useRef<{ fingerprint: string; key: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -69,6 +71,8 @@ export default function CartDrawer({
   }, []);
 
   const submitOrder = async (startNewAttempt = false) => {
+    if (!session) return;
+
     if (!address.trim()) {
       setSubmitError("Please enter a delivery address.");
       return;
@@ -108,12 +112,14 @@ export default function CartDrawer({
         };
         checkoutRequest.current = request;
       }
-      const order = await createOrder(input, request.key);
+      const order = await createOrder(input, request.key, session.accessToken);
       onOrderCreated(order.order_id);
       checkoutRequest.current = null;
       setCartOpen(false);
       setCheckout(false);
     } catch (error) {
+      // An expired session returns the drawer to its sign-in prompt.
+      if (error instanceof ApiError && error.status === 401) clearSession();
       setSubmitError(error instanceof Error ? error.message : "Unable to place the order.");
       setCanStartNewAttempt(
         error instanceof ApiError && error.status === 409,
@@ -143,7 +149,7 @@ export default function CartDrawer({
         <div className="drawer-header">
           <div>
             <span className="section-kicker">{tr("YOUR FRESH PICKS")}</span>
-            <h2>{checkout ? "Checkout preview" : `My cart (${count})`}</h2>
+            <h2>{checkout ? "Checkout" : `My cart (${count})`}</h2>
           </div>
           <button
             className="close-button"
@@ -159,25 +165,22 @@ export default function CartDrawer({
         {checkout ? (
           <div className="checkout-preview">
             <p>Review your delivery details before placing the order.</p>
+            {session ? (
+              <>
             <label>
               {tr("Delivery address")}
               <input
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  setSubmitError("");
+                }}
                 placeholder={tr("Enter delivery address")}
               />
             </label>
-            <div className="checkout-summary">
-              <span>Items</span>
-              <strong>{money(subtotal)}</strong>
-            </div>
-            <div className="checkout-summary">
-              <span>Delivery</span>
-              <strong>{delivery ? money(delivery) : "Free"}</strong>
-            </div>
             <div className="checkout-summary checkout-final">
               <span>Total</span>
-              <strong>{money(subtotal + delivery)}</strong>
+              <strong>{money(subtotal)}</strong>
             </div>
             {submitError && <p className="checkout-error" role="alert">{submitError}</p>}
             {canStartNewAttempt && (
@@ -196,6 +199,19 @@ export default function CartDrawer({
             >
               {submitting ? "Placing order..." : "Place order"}
             </button>
+              </>
+            ) : (
+              <div className="auth-prompt">
+                {submitError && <p className="checkout-error" role="alert">{submitError}</p>}
+                <p>Sign in to place your order. Your cart will be kept.</p>
+                <Link
+                  href={`/login?next=${encodeURIComponent("/?cart=open")}`}
+                  className="primary-button full"
+                >
+                  Sign in to continue
+                </Link>
+              </div>
+            )}
             <button className="back-button" onClick={() => setCheckout(false)}>
               ← Back to cart
             </button>
@@ -255,22 +271,9 @@ export default function CartDrawer({
             </div>
             {count > 0 && (
               <div className="drawer-footer">
-                <div className="delivery-hint">
-                  {subtotal >= 200000
-                    ? "✓ You unlocked free delivery!"
-                    : `Add ${money(200000 - subtotal)} for free delivery`}
-                </div>
-                <div className="checkout-summary">
-                  <span>Subtotal</span>
-                  <strong>{money(subtotal)}</strong>
-                </div>
-                <div className="checkout-summary">
-                  <span>Delivery</span>
-                  <strong>{delivery ? money(delivery) : "Free"}</strong>
-                </div>
                 <div className="checkout-summary checkout-final">
-                  <span>Estimated total</span>
-                  <strong>{money(subtotal + delivery)}</strong>
+                  <span>Total</span>
+                  <strong>{money(subtotal)}</strong>
                 </div>
                 <button className="primary-button full" onClick={() => setCheckout(true)}>
                   Continue to checkout <span>→</span>

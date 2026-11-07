@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { getOrder, getProduct, type Order } from "../../../lib/api";
+import { useAuth } from "../../../hooks/useAuth";
+import { ApiError, getOrder, getProduct, type Order } from "../../../lib/api";
+import { clearSession } from "../../../lib/auth";
 import { money } from "../../../utils/presentation";
 
 type Props = {
@@ -34,6 +36,8 @@ async function loadProductNames(
 }
 
 export default function OrderStatusPage({ params, searchParams }: Props) {
+  const { session, ready } = useAuth();
+  const accessToken = session?.accessToken;
   const [orderId, setOrderId] = useState("");
   const [justPlaced, setJustPlaced] = useState(false);
   const [order, setOrder] = useState<Order | null>(null);
@@ -41,9 +45,9 @@ export default function OrderStatusPage({ params, searchParams }: Props) {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async (id: string, signal?: AbortSignal) => {
+  const load = useCallback(async (id: string, token: string, signal?: AbortSignal) => {
     try {
-      const result = await getOrder(id, signal);
+      const result = await getOrder(id, token, signal);
       if (signal?.aborted) return;
       setOrder(result);
       setError("");
@@ -51,6 +55,11 @@ export default function OrderStatusPage({ params, searchParams }: Props) {
       if (!signal?.aborted) setNames((current) => ({ ...current, ...lookedUp }));
     } catch (reason) {
       if (signal?.aborted) return;
+      // An expired session falls through to the sign-in prompt below.
+      if (reason instanceof ApiError && reason.status === 401) {
+        clearSession();
+        return;
+      }
       setError(reason instanceof Error ? reason.message : "Unable to load this order.");
     }
   }, []);
@@ -62,15 +71,18 @@ export default function OrderStatusPage({ params, searchParams }: Props) {
       if (controller.signal.aborted) return;
       setOrderId(id);
       setJustPlaced(query.placed === "1");
-      return load(id, controller.signal);
+      if (accessToken) return load(id, accessToken, controller.signal);
     });
     return () => controller.abort();
-  }, [params, searchParams, load]);
+  }, [params, searchParams, load, accessToken]);
 
   const refresh = () => {
+    if (!accessToken) return;
     setRefreshing(true);
-    void load(orderId).finally(() => setRefreshing(false));
+    void load(orderId, accessToken).finally(() => setRefreshing(false));
   };
+
+  const signedOut = ready && !session;
 
   return (
     <main className="journey-page container">
@@ -83,8 +95,23 @@ export default function OrderStatusPage({ params, searchParams }: Props) {
         </p>
       )}
       {error && <p className="journey-error" role="alert">{error}</p>}
-      {!error && !order && <p role="status">Loading order {orderId.slice(0, 8)}...</p>}
-      {order && (
+      {signedOut && (
+        <div className="journey-actions">
+          <p>Sign in to view this order.</p>
+          {orderId && (
+            <Link
+              href={`/login?next=${encodeURIComponent(`/orders/${orderId}`)}`}
+              className="primary-button"
+            >
+              Sign in
+            </Link>
+          )}
+        </div>
+      )}
+      {!signedOut && !error && !order && (
+        <p role="status">Loading order {orderId.slice(0, 8)}...</p>
+      )}
+      {!signedOut && order && (
         <section className="journey-card">
           <p><strong>Status:</strong> {formatStatus(order.status)}</p>
           <p><strong>Payment:</strong> Cash on delivery — {formatStatus(order.payment_status)}</p>

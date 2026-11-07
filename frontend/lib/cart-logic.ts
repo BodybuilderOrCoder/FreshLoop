@@ -6,7 +6,6 @@ export type Cart = Record<number, number>;
 export type CartSummary = {
   count: number;
   subtotal: number;
-  delivery: number;
 };
 
 /**
@@ -97,7 +96,8 @@ export function updateCartQuantity(
 }
 
 /**
- * Calculate cart count, subtotal and delivery fee from the current catalog.
+ * Calculate cart count and subtotal from the current catalog. Delivery is free,
+ * so the subtotal matches the total the server stores on the order.
  */
 export function calculateCartSummary(
   cart: Cart,
@@ -113,8 +113,5 @@ export function calculateCartSummary(
     0,
   );
 
-  const delivery =
-    subtotal >= 200000 || subtotal === 0 ? 0 : 15000;
-
-  return { count, subtotal, delivery };
+  return { count, subtotal };
 }

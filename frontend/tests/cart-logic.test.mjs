@@ -74,7 +74,7 @@ test("removes an item when its quantity reaches zero", () => {
   assert.deepEqual(result, {});
 });
 
-test("calculates subtotal and delivery below the free-delivery threshold", () => {
+test("the cart total is the item subtotal, matching the server total", () => {
   const result = calculateCartSummary(
     { 1: 2 },
     [makeProduct(1, 84550, 5)],
@@ -83,19 +83,5 @@ test("calculates subtotal and delivery below the free-delivery threshold", () =>
   assert.deepEqual(result, {
     count: 2,
     subtotal: 169100,
-    delivery: 15000,
-  });
-});
-
-test("waives delivery when subtotal reaches 200000", () => {
-  const result = calculateCartSummary(
-    { 1: 2 },
-    [makeProduct(1, 100000, 5)],
-  );
-
-  assert.deepEqual(result, {
-    count: 2,
-    subtotal: 200000,
-    delivery: 0,
   });
 });

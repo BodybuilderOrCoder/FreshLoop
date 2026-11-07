@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import type { Category, Product } from "../data/products";
 import { useCatalog } from "../hooks/useCatalog";
+import { useAuth } from "../hooks/useAuth";
 import { useCart } from "../hooks/useCart";
 import { useFavorites } from "../hooks/useFavorites";
 import { vi } from "../utils/presentation";
@@ -46,8 +47,12 @@ export default function Home() {
     liveStatus,
   } = useCatalog();
 
-  const { cart, count, subtotal, delivery, changeQty, clearCart } =
+  const { cart, count, subtotal, changeQty, clearCart } =
     useCart(catalogProducts);
+  const { session } = useAuth();
+  const accessToken = session?.accessToken;
+  // Signed-in customers get their own picks; the demo ID is for walkthroughs.
+  const recommendationUserId = session?.userId ?? process.env.NEXT_PUBLIC_DEMO_USER_ID;
   const [recommendationIds, setRecommendationIds] = useState<string[]>([]);
   const [recommendationError, setRecommendationError] = useState("");
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
@@ -113,16 +118,19 @@ export default function Home() {
 
   useEffect(() => {
     if (!warehouse?.warehouse_id) return;
-    const userId = process.env.NEXT_PUBLIC_DEMO_USER_ID;
-
-    if (!userId) return;
+    if (!recommendationUserId) return;
 
     const controller = new AbortController();
     void Promise.resolve().then(() => {
       if (controller.signal.aborted) return [];
       setRecommendationsLoading(true);
       setRecommendationError("");
-      return getRecommendations(userId, warehouse.warehouse_id, controller.signal);
+      return getRecommendations(
+        recommendationUserId,
+        warehouse.warehouse_id,
+        controller.signal,
+        accessToken,
+      );
     })
       .then((items) => {
         if (!controller.signal.aborted) {
@@ -142,13 +150,13 @@ export default function Home() {
       });
 
     return () => controller.abort();
-  }, [warehouse?.warehouse_id]);
+  }, [warehouse?.warehouse_id, recommendationUserId, accessToken]);
 
   const recommendedProducts = useMemo(
-    () => recommendationIds
+    () => (recommendationUserId ? recommendationIds : [])
       .map((id) => catalogProducts.find((product) => product.backendProductId === id))
       .filter((product): product is Product => Boolean(product && product.stock > 0)),
-    [catalogProducts, recommendationIds],
+    [catalogProducts, recommendationIds, recommendationUserId],
   );
 
   const add = (product: Product) => {
@@ -197,8 +205,7 @@ export default function Home() {
       lang={language}
     >
       <div className="announcement">
-        {tr("Fresh groceries, smarter shopping")} <span>·</span>{" "}
-        {tr("Free delivery on orders over 200,000₫")}
+        {tr("Fresh groceries, smarter shopping")}
       </div>
 
       <Header
@@ -326,7 +333,7 @@ export default function Home() {
               products={recommendedProducts}
               addReorder={addReorder}
               loading={recommendationsLoading}
-              error={recommendationError || (!process.env.NEXT_PUBLIC_DEMO_USER_ID ? "Sign in to see your Quick Reorder picks." : "")}
+              error={recommendationUserId ? recommendationError : "Sign in to see your Quick Reorder picks."}
             />
           </>
         )}
@@ -358,7 +365,6 @@ export default function Home() {
           address={address}
           setAddress={setAddress}
           subtotal={subtotal}
-          delivery={delivery}
             onOrderCreated={(orderId) => {
               clearCart();
               router.push(`/orders/${encodeURIComponent(orderId)}?placed=1`);
