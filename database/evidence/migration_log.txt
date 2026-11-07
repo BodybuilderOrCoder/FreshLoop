@@ -191,5 +191,20 @@ ALTER TABLE order_items ALTER COLUMN product_name SET NOT NULL;
 
 UPDATE alembic_version SET version_num='646f565b7940' WHERE alembic_version.version_num = 'b22df6a0d648';
 
+-- Running upgrade 646f565b7940 -> a09364ca8d50
+
+ALTER TABLE orders ADD CONSTRAINT chk_order_payment_status_consistency CHECK (
+        (
+            (status = 'DELIVERED' AND payment_status = 'PAID')
+            OR
+            (
+                status IN ('PENDING', 'CONFIRMED', 'CANCELLED')
+                AND payment_status = 'UNPAID'
+            )
+        )
+        );
+
+UPDATE alembic_version SET version_num='a09364ca8d50' WHERE alembic_version.version_num = '646f565b7940';
+
 COMMIT;
 

@@ -641,5 +641,30 @@ class TestDatabaseIntegrity(unittest.TestCase):
         self.db.delete(order)
         self.db.commit()
 
+
+    def test_order_payment_status_consistency_check_constraint(self):
+        """Verify that chk_order_payment_status_consistency blocks DELIVERED with UNPAID, or PENDING with PAID."""
+        test_user = self.db.query(User).filter_by(role='CUSTOMER').first()
+        test_wh = self.db.query(Warehouse).first()
+        if not test_user or not test_wh:
+            self.skipTest("Users or warehouses missing.")
+
+        # Inconsistent: DELIVERED but UNPAID
+        inconsistent_order = Order(
+            order_id=uuid.uuid4(),
+            user_id=test_user.user_id,
+            warehouse_id=test_wh.warehouse_id,
+            order_number=f"TEST-INCONSISTENT-{uuid.uuid4().hex[:6]}",
+            status="DELIVERED",
+            payment_method="COD",
+            payment_status="UNPAID",  # Inconsistent! DELIVERED must be PAID
+            total_amount=Decimal("100000.00"),
+            delivery_address="Test Address"
+        )
+        self.db.add(inconsistent_order)
+        with self.assertRaises(IntegrityError):
+            self.db.commit()
+        self.db.rollback()
+
 if __name__ == "__main__":
     unittest.main()

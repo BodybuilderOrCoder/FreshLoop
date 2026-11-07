@@ -20,6 +20,7 @@ from app.models.schema import (
     OrderItem,
     PurchaseHistory,
     StaffWarehouseAssignment,
+    IdempotencyRecord,
 )
 
 # Seed parameters conforming to Week 1 Task 3.3 Target Deliverables:
@@ -187,6 +188,7 @@ def expand_catalog_to_target(templates, target_count=200):
 def clean_database(db):
     """Cleans all existing records in reverse dependency order for clean idempotent re-runs."""
     print(">>> Cleaning existing database records (idempotent run)...")
+    db.query(IdempotencyRecord).delete()
     db.query(StaffWarehouseAssignment).delete()
     db.query(PurchaseHistory).delete()
     db.query(OrderItem).delete()
